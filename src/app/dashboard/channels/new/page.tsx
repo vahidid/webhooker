@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/card";
 import { useCreateChannel } from "@/hooks/use-channels";
 import { createChannelSchema, channelTypeEnum } from "@/lib/validations/channel";
+import { testTelegramChannel } from "@/features/channels/actions/test";
 
 // Channel type configuration
 const channelTypes = [
@@ -141,14 +142,9 @@ export default function NewChannelPage() {
 
     setTestStatus("testing");
     setTestError(null);
+    const isConnected = await testTelegramChannel(values.botToken, values.chatId);
 
-    // TODO: Integrate with API to test Telegram connection
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    // Simulate success/failure randomly for demo
-    const success = Math.random() > 0.3;
-    if (success) {
+    if (isConnected) {
       setTestStatus("success");
     } else {
       setTestStatus("error");

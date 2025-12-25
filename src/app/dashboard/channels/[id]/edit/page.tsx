@@ -39,6 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useChannel, useUpdateChannel } from "@/hooks/use-channels";
+import { testTelegramChannel } from "@/features/channels/actions/test";
 
 // Form schema for editing Telegram channel
 const editChannelSchema = z.object({
@@ -131,11 +132,9 @@ export default function EditChannelPage() {
     setTestStatus("testing");
     setTestError(null);
 
-    // TODO: Integrate with API to test Telegram connection
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const isConnected = await testTelegramChannel(values.botToken!, values.chatId);
 
-    const success = Math.random() > 0.3;
-    if (success) {
+    if (isConnected) {
       setTestStatus("success");
     } else {
       setTestStatus("error");
