@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import QueryClientProvider from "@/components/providers/query-client";
+import { Toaster } from "sonner";
 
 const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-sans'});
 
@@ -32,6 +33,7 @@ export default function RootLayout({
       >
         <QueryClientProvider>
         {children}
+        <Toaster position="top-right" richColors />
         </QueryClientProvider>
       </body>
     </html>

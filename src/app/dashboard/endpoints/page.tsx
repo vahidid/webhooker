@@ -13,6 +13,7 @@ import {
   Play,
   GitlabLogoSimple,
 } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,30 +31,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-// Mock data - will be replaced with real data from API
-const mockEndpoints = [
-  {
-    id: "1",
-    name: "Production GitLab",
-    slug: "production-gitlab",
-    provider: { name: "gitlab", displayName: "GitLab" },
-    status: "ACTIVE" as const,
-    routeCount: 2,
-    eventCount: 156,
-    createdAt: new Date("2024-12-20"),
-  },
-  {
-    id: "2",
-    name: "Staging GitLab",
-    slug: "staging-gitlab",
-    provider: { name: "gitlab", displayName: "GitLab" },
-    status: "PAUSED" as const,
-    routeCount: 1,
-    eventCount: 42,
-    createdAt: new Date("2024-12-22"),
-  },
-];
+import { Skeleton } from "@/components/ui/skeleton";
+import { useEndpoints, useUpdateEndpoint, useDeleteEndpoint } from "@/hooks/use-endpoints";
 
 const statusColors = {
   ACTIVE: "bg-green-500/10 text-green-600 border-green-500/20",
@@ -61,16 +40,101 @@ const statusColors = {
   DISABLED: "bg-gray-500/10 text-gray-600 border-gray-500/20",
 };
 
+function EndpointsSkeleton() {
+  return (
+    <div className="grid gap-4">
+      {[1, 2].map((i) => (
+        <Card key={i}>
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <Skeleton className="size-10 rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+              </div>
+              <Skeleton className="h-6 w-16" />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-9 w-full" />
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-24 ml-auto" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export default function EndpointsPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const orgSlug = "acme-inc"; // Will come from context
+  const orgSlug = "acme-inc"; // TODO: Will come from context
+  
+  const { data, isLoading, error } = useEndpoints();
+  const updateEndpoint = useUpdateEndpoint();
+  const deleteEndpoint = useDeleteEndpoint();
 
-  const copyWebhookUrl = (endpoint: (typeof mockEndpoints)[0]) => {
-    const url = `https://webhooker.app/api/webhook/${orgSlug}/${endpoint.slug}`;
+  const copyWebhookUrl = (slug: string, id: string) => {
+    const url = `https://webhooker.app/api/webhook/${orgSlug}/${slug}`;
     navigator.clipboard.writeText(url);
-    setCopiedId(endpoint.id);
+    setCopiedId(id);
+    toast.success("Webhook URL copied to clipboard");
     setTimeout(() => setCopiedId(null), 2000);
   };
+
+  const toggleEndpointStatus = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === "ACTIVE" ? "PAUSED" : "ACTIVE";
+    
+    try {
+      await updateEndpoint.mutateAsync({
+        id,
+        data: { status: newStatus as any },
+      });
+      toast.success(`Endpoint ${newStatus === "ACTIVE" ? "resumed" : "paused"} successfully`);
+    } catch (error) {
+      toast.error("Failed to update endpoint status");
+    }
+  };
+
+  const handleDeleteEndpoint = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await deleteEndpoint.mutateAsync(id);
+      toast.success("Endpoint deleted successfully");
+    } catch (error) {
+      toast.error("Failed to delete endpoint");
+    }
+  };
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Endpoints</h1>
+            <p className="text-muted-foreground">
+              Webhook URLs that receive events from your applications
+            </p>
+          </div>
+        </div>
+        <Card className="border-destructive">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <p className="text-destructive">Failed to load endpoints. Please try again.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const endpoints = data?.success ? data.data : [];
 
   return (
     <div className="space-y-6">
@@ -90,8 +154,11 @@ export default function EndpointsPage() {
         </Button>
       </div>
 
-      {/* Endpoints List */}
-      {mockEndpoints.length === 0 ? (
+      {/* Loading State */}
+      {isLoading && <EndpointsSkeleton />}
+
+      {/* Empty State */}
+      {!isLoading && endpoints.length === 0 && (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <div className="rounded-full bg-muted p-4 mb-4">
@@ -109,9 +176,12 @@ export default function EndpointsPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : (
+      )}
+
+      {/* Endpoints List */}
+      {!isLoading && endpoints.length > 0 && (
         <div className="grid gap-4">
-          {mockEndpoints.map((endpoint) => (
+          {endpoints.map((endpoint) => (
             <Card key={endpoint.id} className="group">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
@@ -160,7 +230,10 @@ export default function EndpointsPage() {
                             Edit
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => toggleEndpointStatus(endpoint.id, endpoint.status)}
+                          disabled={updateEndpoint.isPending}
+                        >
                           {endpoint.status === "ACTIVE" ? (
                             <>
                               <Pause className="size-4" />
@@ -174,7 +247,11 @@ export default function EndpointsPage() {
                           )}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive">
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => handleDeleteEndpoint(endpoint.id, endpoint.name)}
+                          disabled={deleteEndpoint.isPending}
+                        >
                           <Trash className="size-4" />
                           Delete
                         </DropdownMenuItem>
@@ -193,7 +270,7 @@ export default function EndpointsPage() {
                     variant="ghost"
                     size="icon"
                     className="size-7 shrink-0"
-                    onClick={() => copyWebhookUrl(endpoint)}
+                    onClick={() => copyWebhookUrl(endpoint.slug, endpoint.id)}
                   >
                     {copiedId === endpoint.id ? (
                       <Check className="size-3.5 text-green-600" />
@@ -206,15 +283,15 @@ export default function EndpointsPage() {
                 {/* Stats */}
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                   <span>
-                    <strong className="text-foreground">{endpoint.routeCount}</strong>{" "}
+                    <strong className="text-foreground">{endpoint._count.routes}</strong>{" "}
                     routes
                   </span>
                   <span>
-                    <strong className="text-foreground">{endpoint.eventCount}</strong>{" "}
+                    <strong className="text-foreground">{endpoint._count.events}</strong>{" "}
                     events received
                   </span>
                   <span className="ml-auto">
-                    Created {endpoint.createdAt.toLocaleDateString()}
+                    Created {new Date(endpoint.createdAt).toLocaleDateString()}
                   </span>
                 </div>
               </CardContent>
