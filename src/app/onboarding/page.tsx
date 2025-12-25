@@ -20,7 +20,7 @@ import {
   createOrganizationSchema,
   type CreateOrganizationFormData,
 } from "@/lib/validations/organization";
-import { createOrganization, checkSlugAvailability } from "@/lib/actions/organization";
+import { checkSlugAvailability } from "@/lib/actions/organization";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useCreateOrganization } from "@/hooks/use-organization";
 
 const teamSizeOptions = [
   { value: "1", label: "Just me" },
@@ -64,6 +65,8 @@ export default function OnboardingPage() {
       memberCount: 1,
     },
   });
+
+  const {mutateAsync} = useCreateOrganization();
 
   const name = watch("name");
   const slug = watch("slug");
@@ -102,7 +105,7 @@ export default function OnboardingPage() {
     setError(null);
 
     try {
-      const result = await createOrganization(data);
+      const result = await mutateAsync(data);
 
       if (result.success) {
         router.push("/dashboard");
