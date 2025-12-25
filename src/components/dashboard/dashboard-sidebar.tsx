@@ -4,13 +4,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  HouseIcon,
-  WebhooksLogoIcon,
-  ChartLineIcon,
-  BellIcon,
-  GearSixIcon,
-  UserIcon,
-  SignOutIcon,
+  House,
+  Plugs,
+  PaperPlaneTilt,
+  GitBranch,
+  ClockCounterClockwise,
+  GearSix,
+  User,
+  SignOut,
 } from "@phosphor-icons/react";
 import { motion } from "framer-motion";
 
@@ -46,11 +47,12 @@ interface DashboardSidebarProps {
 }
 
 const navItems = [
-  { href: "/dashboard", label: "Overview", icon: HouseIcon },
-  { href: "/dashboard/webhooks", label: "Webhooks", icon: WebhooksLogoIcon },
-  { href: "/dashboard/analytics", label: "Analytics", icon: ChartLineIcon },
-  { href: "/dashboard/notifications", label: "Notifications", icon: BellIcon },
-  { href: "/dashboard/settings", label: "Settings", icon: GearSixIcon },
+  { href: "/dashboard", label: "Overview", icon: House, exact: true },
+  { href: "/dashboard/endpoints", label: "Endpoints", icon: Plugs },
+  { href: "/dashboard/channels", label: "Channels", icon: PaperPlaneTilt },
+  { href: "/dashboard/routes", label: "Routes", icon: GitBranch },
+  { href: "/dashboard/events", label: "Events", icon: ClockCounterClockwise },
+  { href: "/dashboard/settings", label: "Settings", icon: GearSix },
 ];
 
 export function DashboardSidebar({
@@ -91,7 +93,9 @@ export function DashboardSidebar({
       {/* Navigation */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-4">
         {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const isActive = item.exact 
+            ? pathname === item.href 
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
 
           return (
@@ -150,13 +154,13 @@ export function DashboardSidebar({
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/dashboard/settings/profile" className="cursor-pointer gap-2">
-                <UserIcon className="size-4" />
+                <User className="size-4" />
                 Profile
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/dashboard/settings" className="cursor-pointer gap-2">
-                <GearSixIcon className="size-4" />
+                <GearSix className="size-4" />
                 Settings
               </Link>
             </DropdownMenuItem>
@@ -165,7 +169,7 @@ export function DashboardSidebar({
               onClick={() => signOutUser()}
               className="cursor-pointer gap-2 text-destructive focus:text-destructive"
             >
-              <SignOutIcon className="size-4" />
+              <SignOut className="size-4" />
               Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>

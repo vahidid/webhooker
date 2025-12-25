@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma";
 import { createOrganizationSchema } from "@/lib/validations/organization";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const CURRENT_ORG_COOKIE = "current-organization";
 
@@ -13,7 +13,10 @@ try {
     const session = await auth();
     
     if (!session?.user?.id) {
-      return { success: false, error: "You must be logged in to create an organization" };
+      return NextResponse.json(
+        { success: false, error: "You must be logged in to create an organization" },
+        { status: 401 }
+      );
     }
 
     const data = await req.json();
@@ -21,10 +24,10 @@ try {
     const validatedFields = createOrganizationSchema.safeParse(data);
 
     if (!validatedFields.success) {
-      return {
-        success: false,
-        error: validatedFields.error.errors[0]?.message || "Invalid input",
-      };
+      return NextResponse.json(
+        { success: false, error: validatedFields.error.errors[0]?.message || "Invalid input" },
+        { status: 400 }
+      );
     }
 
     const { name, slug, memberCount } = validatedFields.data;
@@ -35,7 +38,10 @@ try {
     });
 
     if (existingOrg) {
-      return { success: false, error: "This slug is already taken" };
+      return NextResponse.json(
+        { success: false, error: "This slug is already taken" },
+        { status: 409 }
+      );
     }
 
     // Create organization
@@ -59,16 +65,19 @@ try {
 
     revalidatePath("/dashboard");
 
-    return {
+    return NextResponse.json({
       success: true,
       data: {
         id: organization.id,
         name: organization.name,
         slug: organization.slug,
       },
-    };
+    });
   } catch (error) {
     console.error("Create organization error:", error);
-    return { success: false, error: "Something went wrong. Please try again." };
+    return NextResponse.json(
+      { success: false, error: "Something went wrong. Please try again." },
+      { status: 500 }
+    );
   }
 }

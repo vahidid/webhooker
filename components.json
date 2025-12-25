@@ -20,5 +20,7 @@
   },
   "menuColor": "default",
   "menuAccent": "subtle",
-  "registries": {}
+  "registries": {
+    "@better-upload": "https://better-upload.com/r/{name}.json"
+  }
 }
