@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useEndpoints, useUpdateEndpoint, useDeleteEndpoint } from "@/hooks/use-endpoints";
 import { EndpointsSkeleton } from "@/features/endpoints/list-skeleton";
+import { useCurrentOrganization } from "@/components/providers/organization";
+import { APP_URL } from "@/utils/constants";
 
 const statusColors = {
   ACTIVE: "bg-green-500/10 text-green-600 border-green-500/20",
@@ -42,14 +44,15 @@ const statusColors = {
 
 export default function EndpointsPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const orgSlug = "acme-inc"; // TODO: Will come from context
+  const { currentOrganization } = useCurrentOrganization();
+  const orgSlug = currentOrganization?.slug ?? "";
   
   const { data, isLoading, error } = useEndpoints();
   const updateEndpoint = useUpdateEndpoint();
   const deleteEndpoint = useDeleteEndpoint();
 
   const copyWebhookUrl = (slug: string, id: string) => {
-    const url = `https://webhooker.app/api/webhook/${orgSlug}/${slug}`;
+    const url = `${APP_URL}/api/webhook/${orgSlug}/${slug}`;
     navigator.clipboard.writeText(url);
     setCopiedId(id);
     toast.success("Webhook URL copied to clipboard");
@@ -65,7 +68,7 @@ export default function EndpointsPage() {
         data: { status: newStatus },
       });
       toast.success(`Endpoint ${newStatus === "ACTIVE" ? "resumed" : "paused"} successfully`);
-    } catch (error) {
+    } catch {
       toast.error("Failed to update endpoint status");
     }
   };
@@ -78,7 +81,7 @@ export default function EndpointsPage() {
     try {
       await deleteEndpoint.mutateAsync(id);
       toast.success("Endpoint deleted successfully");
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete endpoint");
     }
   };
@@ -233,7 +236,7 @@ export default function EndpointsPage() {
                 {/* Webhook URL */}
                 <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
                   <code className="flex-1 text-xs text-muted-foreground truncate">
-                    https://webhooker.app/api/webhook/{orgSlug}/{endpoint.slug}
+                    {APP_URL}/api/webhook/{orgSlug}/{endpoint.slug}
                   </code>
                   <Button
                     variant="ghost"

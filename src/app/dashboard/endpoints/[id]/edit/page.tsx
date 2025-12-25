@@ -42,6 +42,8 @@ import {
   updateEndpointSchema,
   UpdateEndpointInput,
 } from "@/lib/validations/endpoint";
+import { useCurrentOrganization } from "@/components/providers/organization";
+import { APP_URL } from "@/utils/constants";
 
 function generateSecret(): string {
   const chars =
@@ -74,7 +76,8 @@ export default function EditEndpointPage() {
   
   const [showSecret, setShowSecret] = useState(false);
   const [copied, setCopied] = useState(false);
-  const orgSlug = "acme-inc"; // Will come from context
+  const { currentOrganization } = useCurrentOrganization();
+  const orgSlug = currentOrganization?.slug ?? "";
 
   const { data: endpointData, isLoading, error } = useEndpoint(endpointId);
   const updateEndpoint = useUpdateEndpoint();
@@ -371,7 +374,7 @@ export default function EditEndpointPage() {
           <CardContent>
             <div className="rounded-lg bg-muted/50 px-3 py-2">
               <code className="text-sm break-all">
-                https://webhooker.app/api/webhook/{orgSlug}/
+                {APP_URL}/api/webhook/{orgSlug}/
                 <span className="text-primary">{slug || "your-slug"}</span>
               </code>
             </div>

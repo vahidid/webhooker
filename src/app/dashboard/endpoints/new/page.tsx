@@ -33,7 +33,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useProviders } from "@/hooks/use-providers";
 import { useCreateEndpoint } from "@/hooks/use-endpoints";
 import { createEndpointSchema } from "@/lib/validations/endpoint";
+import { useCurrentOrganization } from "@/components/providers/organization";
 import { z } from "zod/v3";
+import { APP_URL } from "@/utils/constants";
 
 // Form input type (before transforms)
 type EndpointFormData = z.input<typeof createEndpointSchema>;
@@ -61,7 +63,8 @@ export default function NewEndpointPage() {
   const [showSecret, setShowSecret] = useState(false);
   const [copied, setCopied] = useState(false);
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
-  const orgSlug = "acme-inc"; // Will come from context
+  const { currentOrganization } = useCurrentOrganization();
+  const orgSlug = currentOrganization?.slug ?? "";
 
   const { data: providersData, isLoading: isLoadingProviders } = useProviders();
   const createEndpoint = useCreateEndpoint();
@@ -349,7 +352,7 @@ export default function NewEndpointPage() {
           <CardContent>
             <div className="rounded-lg bg-muted/50 px-3 py-2">
               <code className="text-sm break-all">
-                https://webhooker.app/api/webhook/{orgSlug}/
+                {APP_URL}/api/webhook/{orgSlug}/
                 <span className="text-primary">{slug || "your-slug"}</span>
               </code>
             </div>

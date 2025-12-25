@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getCurrentOrganization, getUserOrganizations } from "@/lib/actions/organization";
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
+import { OrganizationProvider } from "@/components/providers/organization";
 
 export default async function DashboardLayout({
   children,
@@ -26,19 +27,24 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <DashboardSidebar
-        organizations={organizations}
-        currentOrganization={currentOrganization}
-        user={{
-          name: session.user.name,
-          email: session.user.email,
-          image: session.user.image,
-        }}
-      />
-      <main className="flex-1 overflow-y-auto">
-        <div className="min-h-full p-8">{children}</div>
-      </main>
-    </div>
+    <OrganizationProvider
+      currentOrganization={currentOrganization}
+      organizations={organizations}
+    >
+      <div className="flex h-screen bg-background">
+        <DashboardSidebar
+          organizations={organizations}
+          currentOrganization={currentOrganization}
+          user={{
+            name: session.user.name,
+            email: session.user.email,
+            image: session.user.image,
+          }}
+        />
+        <main className="flex-1 overflow-y-auto">
+          <div className="min-h-full p-8">{children}</div>
+        </main>
+      </div>
+    </OrganizationProvider>
   );
 }
