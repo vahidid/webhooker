@@ -9,6 +9,7 @@ import {
   Pause,
   Play,
   TelegramLogo,
+  TelegramLogoIcon,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -28,8 +29,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useChannels, useUpdateChannel, useDeleteChannel } from "@/hooks/use-channels";
+import { ChannelsSkeleton } from "@/features/channels/list-skeleton";
 
 const statusColors = {
   ACTIVE: "bg-green-500/10 text-green-600 border-green-500/20",
@@ -37,40 +38,6 @@ const statusColors = {
   DISABLED: "bg-gray-500/10 text-gray-600 border-gray-500/20",
   ERROR: "bg-red-500/10 text-red-600 border-red-500/20",
 };
-
-function ChannelsSkeleton() {
-  return (
-    <div className="grid gap-4">
-      {[1, 2, 3].map((i) => (
-        <Card key={i}>
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <Skeleton className="size-10 rounded-lg" />
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-3 w-20" />
-                </div>
-              </div>
-              <Skeleton className="h-6 w-16" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-4">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-4 w-24" />
-            </div>
-            <div className="flex items-center gap-4">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-4 w-24 ml-auto" />
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
 
 export default function ChannelsPage() {
   const { data, isLoading, error } = useChannels();
@@ -83,7 +50,7 @@ export default function ChannelsPage() {
     try {
       await updateChannel.mutateAsync({
         id,
-        data: { status: newStatus as any },
+        data: { status: newStatus },
       });
       toast.success(`Channel ${newStatus === "ACTIVE" ? "resumed" : "paused"} successfully`);
     } catch (error) {
@@ -152,7 +119,7 @@ export default function ChannelsPage() {
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <div className="rounded-full bg-muted p-4 mb-4">
-              <TelegramLogo className="size-8 text-muted-foreground" />
+              <TelegramLogoIcon className="size-8 text-muted-foreground" />
             </div>
             <h3 className="text-lg font-semibold mb-1">No channels yet</h3>
             <p className="text-muted-foreground text-center max-w-sm mb-4">
@@ -173,7 +140,7 @@ export default function ChannelsPage() {
       {!isLoading && channels.length > 0 && (
         <div className="grid gap-4">
           {channels.map((channel) => {
-            const config = channel.config as any;
+            const config = channel.config as Record<string, any>;
             return (
               <Card key={channel.id} className="group">
                 <CardHeader className="pb-3">

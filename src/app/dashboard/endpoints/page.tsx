@@ -31,45 +31,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useEndpoints, useUpdateEndpoint, useDeleteEndpoint } from "@/hooks/use-endpoints";
+import { EndpointsSkeleton } from "@/features/endpoints/list-skeleton";
 
 const statusColors = {
   ACTIVE: "bg-green-500/10 text-green-600 border-green-500/20",
   PAUSED: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
   DISABLED: "bg-gray-500/10 text-gray-600 border-gray-500/20",
 };
-
-function EndpointsSkeleton() {
-  return (
-    <div className="grid gap-4">
-      {[1, 2].map((i) => (
-        <Card key={i}>
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <Skeleton className="size-10 rounded-lg" />
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-16" />
-                </div>
-              </div>
-              <Skeleton className="h-6 w-16" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Skeleton className="h-9 w-full" />
-            <div className="flex items-center gap-4">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-24 ml-auto" />
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
 
 export default function EndpointsPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -93,7 +62,7 @@ export default function EndpointsPage() {
     try {
       await updateEndpoint.mutateAsync({
         id,
-        data: { status: newStatus as any },
+        data: { status: newStatus },
       });
       toast.success(`Endpoint ${newStatus === "ACTIVE" ? "resumed" : "paused"} successfully`);
     } catch (error) {
