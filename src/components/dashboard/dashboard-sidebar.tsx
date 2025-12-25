@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import LogoImage from '@/assets/images/logo.png';
 
 interface Organization {
   id: string;
@@ -75,11 +76,8 @@ export function DashboardSidebar({
   return (
     <aside className="flex h-screen w-64 flex-col border-r border-border bg-card">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2 border-b border-border px-4">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-          W
-        </div>
-        <span className="text-lg font-semibold">Webhooker</span>
+      <div className="flex h-20 items-center justify-center gap-2 border-b border-border px-4">
+        <Image src={LogoImage} alt="Webhooker Logo" height={160} />
       </div>
 
       {/* Organization Switcher */}
