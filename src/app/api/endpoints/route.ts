@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
             name: true,
             displayName: true,
             iconUrl: true,
+            eventTypes: true,
           },
         },
         _count: {

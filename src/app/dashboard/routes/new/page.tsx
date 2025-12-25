@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod/v3";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   GitlabLogoSimple,
@@ -13,12 +14,14 @@ import {
   ArrowRight,
   CaretDown,
   Check,
+  SpinnerGap,
 } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldError, FieldGroup } from "@/components/ui/field";
 import {
   Card,
@@ -40,45 +43,77 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-// Mock data - will be replaced with real data from API
-const mockEndpoints = [
-  { id: "1", name: "Production GitLab", slug: "production-gitlab" },
-  { id: "2", name: "Staging GitLab", slug: "staging-gitlab" },
-];
-
-const mockChannels = [
-  { id: "1", name: "Dev Team Notifications", type: "TELEGRAM" },
-  { id: "2", name: "Alerts Channel", type: "TELEGRAM" },
-  { id: "3", name: "Staging Notifications", type: "TELEGRAM" },
-];
-
-const mockTemplates = [
-  { id: "1", name: "MR Notification" },
-  { id: "2", name: "Pipeline Alert" },
-  { id: "3", name: "Push Event" },
-];
+import { useEndpoints } from "@/hooks/use-endpoints";
+import { useChannels } from "@/hooks/use-channels";
+import { useCreateRoute } from "@/hooks/use-routes";
+import type { EndpointWithRelations } from "@/services/endpoint.service";
+import type { ChannelWithRelations } from "@/services/channel.service";
 
 const routeSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   endpointId: z.string().min(1, "Endpoint is required"),
   channelId: z.string().min(1, "Channel is required"),
-  filterExpression: z.string().optional(),
-  templateId: z.string().optional(),
+  eventTypes: z.array(z.string()).optional(),
+  messageTemplate: z.string().optional(),
   retryStrategy: z.enum(["NONE", "LINEAR", "EXPONENTIAL"]),
   retryCount: z.coerce.number().min(0).max(10),
 });
 
 type RouteFormData = z.infer<typeof routeSchema>;
 
+// Get channel icon based on type
+const getChannelIcon = (type: string) => {
+  switch (type) {
+    case "TELEGRAM":
+      return <TelegramLogo className="size-4 text-sky-500" weight="fill" />;
+    default:
+      return <TelegramLogo className="size-4 text-sky-500" weight="fill" />;
+  }
+};
+
+const getChannelIconSmall = (type: string) => {
+  switch (type) {
+    case "TELEGRAM":
+      return <TelegramLogo className="size-3 text-sky-500" weight="fill" />;
+    default:
+      return <TelegramLogo className="size-3 text-sky-500" weight="fill" />;
+  }
+};
+
 export default function NewRoutePage() {
   const router = useRouter();
-  const [selectedEndpoint, setSelectedEndpoint] = useState<
-    (typeof mockEndpoints)[0] | null
-  >(null);
-  const [selectedChannel, setSelectedChannel] = useState<
-    (typeof mockChannels)[0] | null
-  >(null);
+  const [selectedEndpoint, setSelectedEndpoint] = useState<EndpointWithRelations | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<ChannelWithRelations | null>(null);
+  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
+
+  // Fetch endpoints and channels from API
+  const { data: endpointsData, isLoading: endpointsLoading } = useEndpoints();
+  const { data: channelsData, isLoading: channelsLoading } = useChannels();
+  const createRoute = useCreateRoute();
+
+  const endpoints = endpointsData?.success ? endpointsData.data : [];
+  const channels = channelsData?.success ? channelsData.data : [];
+
+  // Get available events from selected endpoint's provider
+  const availableEvents = useMemo(() => {
+    if (!selectedEndpoint) return [];
+    
+    // First check if endpoint has allowedEvents configured
+    if (selectedEndpoint.allowedEvents && selectedEndpoint.allowedEvents.length > 0) {
+      return selectedEndpoint.allowedEvents;
+    }
+    
+    // Otherwise, try to get events from provider's eventTypes
+    const provider = selectedEndpoint.provider;
+    if (provider && 'eventTypes' in provider) {
+      const eventTypes = provider.eventTypes;
+      if (Array.isArray(eventTypes)) {
+        return eventTypes as string[];
+      }
+    }
+    
+    return [];
+  }, [selectedEndpoint]);
 
   const {
     register,
@@ -92,8 +127,8 @@ export default function NewRoutePage() {
       name: "",
       endpointId: "",
       channelId: "",
-      filterExpression: "",
-      templateId: "",
+      eventTypes: [],
+      messageTemplate: "",
       retryStrategy: "EXPONENTIAL",
       retryCount: 5,
     },
@@ -101,12 +136,51 @@ export default function NewRoutePage() {
 
   const retryStrategy = watch("retryStrategy");
 
+  // Handle event selection
+  const toggleEvent = (event: string) => {
+    setSelectedEvents((prev) => {
+      const newEvents = prev.includes(event)
+        ? prev.filter((e) => e !== event)
+        : [...prev, event];
+      setValue("eventTypes", newEvents);
+      return newEvents;
+    });
+  };
+
   const onSubmit = async (data: RouteFormData) => {
-    // TODO: Integrate with API
-    console.log("Creating route:", data);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push("/dashboard/routes");
+    try {
+      // Build filter expression from selected events if any
+      let filterExpression: string | undefined;
+      if (data.eventTypes && data.eventTypes.length > 0) {
+        // Create a filter expression based on selected events
+        // This assumes events come from x-gitlab-event header or similar
+        const eventConditions = data.eventTypes.map(
+          (event) => `$.headers['x-gitlab-event'] == '${event}'`
+        );
+        filterExpression = eventConditions.length === 1
+          ? eventConditions[0]
+          : `(${eventConditions.join(' || ')})`;
+      }
+
+      await createRoute.mutateAsync({
+        name: data.name,
+        endpointId: data.endpointId,
+        channelId: data.channelId,
+        filterExpression,
+        retryStrategy: data.retryStrategy,
+        retryCount: data.retryCount,
+        delaySeconds: 0,
+        retryIntervalMs: 60000,
+        priority: 0,
+        // Note: messageTemplate will be handled when we add template support
+      });
+      
+      toast.success("Route created successfully");
+      router.push("/dashboard/routes");
+    } catch (error) {
+      toast.error("Failed to create route");
+      console.error("Error creating route:", error);
+    }
   };
 
   return (
@@ -167,8 +241,14 @@ export default function NewRoutePage() {
                     <Button
                       variant="outline"
                       className="w-full justify-between h-auto py-3"
+                      disabled={endpointsLoading}
                     >
-                      {selectedEndpoint ? (
+                      {endpointsLoading ? (
+                        <div className="flex items-center gap-2">
+                          <SpinnerGap className="size-4 animate-spin" />
+                          <span className="text-muted-foreground">Loading...</span>
+                        </div>
+                      ) : selectedEndpoint ? (
                         <div className="flex items-center gap-2">
                           <div className="flex size-8 items-center justify-center rounded-md bg-orange-500/10">
                             <GitlabLogoSimple
@@ -189,28 +269,37 @@ export default function NewRoutePage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width)">
-                    {mockEndpoints.map((endpoint) => (
-                      <DropdownMenuItem
-                        key={endpoint.id}
-                        onClick={() => {
-                          setSelectedEndpoint(endpoint);
-                          setValue("endpointId", endpoint.id);
-                        }}
-                      >
-                        <div className="flex items-center gap-2 flex-1">
-                          <div className="flex size-6 items-center justify-center rounded bg-orange-500/10">
-                            <GitlabLogoSimple
-                              className="size-3 text-orange-600"
-                              weight="fill"
-                            />
-                          </div>
-                          {endpoint.name}
-                        </div>
-                        {selectedEndpoint?.id === endpoint.id && (
-                          <Check className="size-4" />
-                        )}
+                    {endpoints.length === 0 ? (
+                      <DropdownMenuItem disabled>
+                        No endpoints available
                       </DropdownMenuItem>
-                    ))}
+                    ) : (
+                      endpoints.map((endpoint) => (
+                        <DropdownMenuItem
+                          key={endpoint.id}
+                          onClick={() => {
+                            setSelectedEndpoint(endpoint);
+                            setValue("endpointId", endpoint.id);
+                            // Reset selected events when endpoint changes
+                            setSelectedEvents([]);
+                            setValue("eventTypes", []);
+                          }}
+                        >
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="flex size-6 items-center justify-center rounded bg-orange-500/10">
+                              <GitlabLogoSimple
+                                className="size-3 text-orange-600"
+                                weight="fill"
+                              />
+                            </div>
+                            {endpoint.name}
+                          </div>
+                          {selectedEndpoint?.id === endpoint.id && (
+                            <Check className="size-4" />
+                          )}
+                        </DropdownMenuItem>
+                      ))
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
                 {errors.endpointId && (
@@ -233,14 +322,17 @@ export default function NewRoutePage() {
                     <Button
                       variant="outline"
                       className="w-full justify-between h-auto py-3"
+                      disabled={channelsLoading}
                     >
-                      {selectedChannel ? (
+                      {channelsLoading ? (
+                        <div className="flex items-center gap-2">
+                          <SpinnerGap className="size-4 animate-spin" />
+                          <span className="text-muted-foreground">Loading...</span>
+                        </div>
+                      ) : selectedChannel ? (
                         <div className="flex items-center gap-2">
                           <div className="flex size-8 items-center justify-center rounded-md bg-sky-500/10">
-                            <TelegramLogo
-                              className="size-4 text-sky-500"
-                              weight="fill"
-                            />
+                            {getChannelIcon(selectedChannel.type)}
                           </div>
                           <span className="font-medium">
                             {selectedChannel.name}
@@ -255,28 +347,31 @@ export default function NewRoutePage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-(--radix-dropdown-menu-trigger-width)">
-                    {mockChannels.map((channel) => (
-                      <DropdownMenuItem
-                        key={channel.id}
-                        onClick={() => {
-                          setSelectedChannel(channel);
-                          setValue("channelId", channel.id);
-                        }}
-                      >
-                        <div className="flex items-center gap-2 flex-1">
-                          <div className="flex size-6 items-center justify-center rounded bg-sky-500/10">
-                            <TelegramLogo
-                              className="size-3 text-sky-500"
-                              weight="fill"
-                            />
-                          </div>
-                          {channel.name}
-                        </div>
-                        {selectedChannel?.id === channel.id && (
-                          <Check className="size-4" />
-                        )}
+                    {channels.length === 0 ? (
+                      <DropdownMenuItem disabled>
+                        No channels available
                       </DropdownMenuItem>
-                    ))}
+                    ) : (
+                      channels.map((channel) => (
+                        <DropdownMenuItem
+                          key={channel.id}
+                          onClick={() => {
+                            setSelectedChannel(channel);
+                            setValue("channelId", channel.id);
+                          }}
+                        >
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="flex size-6 items-center justify-center rounded bg-sky-500/10">
+                              {getChannelIconSmall(channel.type)}
+                            </div>
+                            {channel.name}
+                          </div>
+                          {selectedChannel?.id === channel.id && (
+                            <Check className="size-4" />
+                          )}
+                        </DropdownMenuItem>
+                      ))
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
                 {errors.channelId && (
@@ -289,33 +384,46 @@ export default function NewRoutePage() {
           </CardContent>
         </Card>
 
-        {/* Filter Expression */}
+        {/* Event Selection */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Filter Expression</CardTitle>
+            <CardTitle className="text-base">Event Types</CardTitle>
             <CardDescription>
-              Only route events matching this JSONPath expression (leave empty
-              for all events)
+              Select which events should trigger this route (leave empty for all events)
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Field>
-              <Label htmlFor="filterExpression">
-                JSONPath Filter{" "}
-                <span className="text-muted-foreground">(optional)</span>
-              </Label>
-              <Textarea
-                id="filterExpression"
-                placeholder="$.headers['x-gitlab-event'] == 'Merge Request Hook'"
-                rows={2}
-                className="font-mono text-sm"
-                {...register("filterExpression")}
-              />
-              <p className="text-xs text-muted-foreground">
-                Examples: <code>$.headers[&apos;x-gitlab-event&apos;] == &apos;Push Hook&apos;</code>,{" "}
-                <code>$.body.object_attributes.status == &apos;failed&apos;</code>
+            {!selectedEndpoint ? (
+              <p className="text-sm text-muted-foreground">
+                Select an endpoint first to see available event types
               </p>
-            </Field>
+            ) : availableEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No specific events configured for this endpoint. All events will be routed.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {availableEvents.map((event) => (
+                    <label
+                      key={event}
+                      className="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors"
+                    >
+                      <Checkbox
+                        checked={selectedEvents.includes(event)}
+                        onCheckedChange={() => toggleEvent(event)}
+                      />
+                      <span className="text-sm font-mono">{event}</span>
+                    </label>
+                  ))}
+                </div>
+                {selectedEvents.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {selectedEvents.length} event{selectedEvents.length !== 1 ? 's' : ''} selected
+                  </p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -324,35 +432,30 @@ export default function NewRoutePage() {
           <CardHeader>
             <CardTitle className="text-base">Message Template</CardTitle>
             <CardDescription>
-              Transform the webhook payload into a custom message format
+              Define how the webhook payload should be formatted when sent to the channel
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Field>
-              <Label htmlFor="templateId">
-                Template{" "}
+              <Label htmlFor="messageTemplate">
+                Message{" "}
                 <span className="text-muted-foreground">(optional)</span>
               </Label>
-              <Select
-                onValueChange={(value) =>
-                  setValue("templateId", value === "none" ? "" : value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pass through raw payload" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Pass through raw payload</SelectItem>
-                  {mockTemplates.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Textarea
+                id="messageTemplate"
+                placeholder={`Example:
+🔔 **{{payload.object_kind}}** in {{payload.project.name}}
+
+{{payload.object_attributes.title}}
+by {{payload.user.name}}
+
+[View Details]({{payload.object_attributes.url}})`}
+                rows={6}
+                className="font-mono text-sm"
+                {...register("messageTemplate")}
+              />
               <p className="text-xs text-muted-foreground">
-                Without a template, the raw webhook payload will be sent to the
-                channel
+                Use Handlebars syntax to access webhook payload fields. Leave empty to pass through raw payload.
               </p>
             </Field>
           </CardContent>
@@ -424,8 +527,15 @@ export default function NewRoutePage() {
 
         {/* Actions */}
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Creating..." : "Create Route"}
+          <Button type="submit" disabled={isSubmitting || createRoute.isPending}>
+            {(isSubmitting || createRoute.isPending) ? (
+              <>
+                <SpinnerGap className="size-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              "Create Route"
+            )}
           </Button>
           <Button type="button" variant="ghost" asChild>
             <Link href="/dashboard/routes">Cancel</Link>

@@ -13,6 +13,7 @@ export interface EndpointWithRelations extends Endpoint {
 		name: string;
 		displayName: string;
 		iconUrl: string | null;
+		eventTypes: string[] | unknown;
 	};
 	_count: {
 		events: number;
