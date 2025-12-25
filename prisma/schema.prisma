@@ -78,5 +78,403 @@ model Organization {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Webhook platform relations
+  endpoints  Endpoint[]
+  channels   Channel[]
+  routes     Route[]
+  templates  MessageTemplate[]
+
   @@index([userId])
+}
+
+// ============================================
+// CONFIGURATION LAYER
+// ============================================
+
+// Source application type (GitHub, GitLab, Jira, etc.)
+model Provider {
+  id            String   @id @default(cuid())
+  name          String   @unique // "github", "gitlab", "jira"
+  displayName   String // "GitHub", "GitLab", "Jira"
+  description   String?
+  iconUrl       String?
+
+  // Webhook verification configuration
+  signatureHeader String? // e.g., "X-Hub-Signature-256"
+  signatureAlgo   SignatureAlgorithm?
+
+  // Supported event types for this provider
+  eventTypes Json // ["push", "pull_request", "issues", ...]
+
+  // Documentation URL
+  docsUrl String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  endpoints Endpoint[]
+
+  @@index([name])
+  @@index([isActive])
+}
+
+enum SignatureAlgorithm {
+  HMAC_SHA1
+  HMAC_SHA256
+  HMAC_SHA512
+  NONE
+}
+
+// Unique webhook URL that receives events from a specific provider
+model Endpoint {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String // URL-safe identifier for webhook URL
+  description String?
+
+  // Webhook secret for signature verification (encrypted)
+  secret String?
+
+  // Provider-specific configuration
+  config Json @default("{}")
+
+  // Filtering at endpoint level (optional)
+  allowedEvents String[] @default([]) // Empty = allow all
+
+  status    EndpointStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  // Relations
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  providerId String
+  provider   Provider @relation(fields: [providerId], references: [id])
+
+  events Event[]
+  routes Route[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([providerId])
+  @@index([status])
+}
+
+enum EndpointStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+// Messaging platform type
+enum ChannelType {
+  TELEGRAM
+  SLACK
+  DISCORD
+  ROCKETCHAT
+  MATTERMOST
+  MICROSOFT_TEAMS
+  WEBHOOK // Generic outbound webhook
+  EMAIL
+}
+
+// Configured messaging destination
+model Channel {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  type        ChannelType
+
+  // Encrypted credentials (bot token, webhook URL, etc.)
+  credentials Json
+
+  // Channel-specific configuration
+  // e.g., { "chatId": "-100123456", "threadId": "123" } for Telegram
+  config Json @default("{}")
+
+  // Rate limiting
+  maxDeliveryRate Int? // Max deliveries per minute
+
+  status    ChannelStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  // Relations
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  routes Route[]
+
+  @@index([organizationId])
+  @@index([type])
+  @@index([status])
+}
+
+enum ChannelStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+  ERROR // Credentials invalid, etc.
+}
+
+// Connection between Endpoint and Channel with routing rules
+model Route {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  // Filtering: JSONPath expression to filter events
+  // e.g., "$.action == 'opened' && $.pull_request.base.ref == 'main'"
+  filterExpression String?
+
+  // Delay before delivery (in seconds)
+  delaySeconds Int @default(0)
+
+  // Retry configuration
+  retryStrategy   RetryStrategy @default(EXPONENTIAL)
+  retryCount      Int           @default(5)
+  retryIntervalMs Int           @default(60000) // Base interval in ms
+
+  // Priority (lower = higher priority when multiple routes match)
+  priority Int @default(0)
+
+  status    RouteStatus @default(ACTIVE)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  // Relations
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  endpointId String
+  endpoint   Endpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  channelId String
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  // Optional template for message transformation
+  templateId String?
+  template   MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  deliveries Delivery[]
+
+  @@index([organizationId])
+  @@index([endpointId])
+  @@index([channelId])
+  @@index([status])
+}
+
+enum RouteStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+enum RetryStrategy {
+  NONE
+  LINEAR
+  EXPONENTIAL
+}
+
+// Message transformation template
+model MessageTemplate {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  // Template format (Handlebars-like syntax)
+  // Supports: {{payload.action}}, {{#if}}, {{#each}}, etc.
+  template String @db.Text
+
+  // Output format
+  format TemplateFormat @default(TEXT)
+
+  // Example payload for testing
+  examplePayload Json?
+
+  // Version control
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  routes Route[]
+
+  @@index([organizationId])
+}
+
+enum TemplateFormat {
+  TEXT
+  MARKDOWN
+  HTML
+  JSON
+}
+
+// ============================================
+// EXECUTION LAYER
+// ============================================
+
+// Raw incoming webhook event
+model Event {
+  id String @id @default(cuid())
+
+  // Event type from provider (e.g., "push", "pull_request.opened")
+  eventType String
+
+  // Original request data
+  headers     Json
+  body        Json
+  queryParams Json    @default("{}")
+  path        String?
+
+  // Request metadata
+  sourceIp  String?
+  userAgent String?
+
+  // Signature verification result
+  signatureValid Boolean?
+
+  // Idempotency key for deduplication
+  idempotencyKey String?
+
+  // Processing status
+  status EventStatus @default(RECEIVED)
+
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  // Relations
+  endpointId String
+  endpoint   Endpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  deliveries Delivery[]
+
+  @@index([endpointId])
+  @@index([eventType])
+  @@index([status])
+  @@index([receivedAt])
+  @@index([idempotencyKey])
+}
+
+enum EventStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  IGNORED // Filtered out at endpoint level
+  INVALID // Signature verification failed
+  ERROR
+}
+
+// Event routed through a specific route to a channel
+model Delivery {
+  id String @id @default(cuid())
+
+  // Transformed message content (after template applied)
+  transformedBody Json?
+
+  // Current delivery status
+  status DeliveryStatus @default(PENDING)
+
+  // Scheduling
+  scheduledFor  DateTime  @default(now())
+  nextAttemptAt DateTime?
+
+  // Attempt tracking
+  attemptCount Int @default(0)
+  maxAttempts  Int @default(5)
+
+  // Completion tracking
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  eventId String
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  routeId String
+  route   Route @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  attempts Attempt[]
+
+  @@index([eventId])
+  @@index([routeId])
+  @@index([status])
+  @@index([scheduledFor])
+  @@index([nextAttemptAt])
+  @@index([status, scheduledFor])
+  @@index([status, nextAttemptAt])
+}
+
+enum DeliveryStatus {
+  PENDING
+  SCHEDULED
+  IN_PROGRESS
+  SUCCESSFUL
+  FAILED
+  CANCELLED
+  ON_HOLD // Route is paused
+}
+
+// Individual delivery attempt
+model Attempt {
+  id String @id @default(cuid())
+
+  // Attempt number (1, 2, 3, ...)
+  attemptNumber Int
+
+  // What triggered this attempt
+  trigger AttemptTrigger
+
+  // Request details sent to channel
+  requestBody    Json?
+  requestHeaders Json?
+
+  // Response from channel
+  responseStatus  Int?
+  responseBody    String? @db.Text
+  responseHeaders Json?
+
+  // Timing
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+
+  // Result
+  status       AttemptStatus @default(PENDING)
+  errorCode    String?
+  errorMessage String?
+
+  // Relations
+  deliveryId String
+  delivery   Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([deliveryId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+enum AttemptTrigger {
+  INITIAL
+  AUTOMATIC_RETRY
+  MANUAL_RETRY
+  BULK_RETRY
+  UNPAUSE
+}
+
+enum AttemptStatus {
+  PENDING
+  IN_PROGRESS
+  SUCCESSFUL
+  FAILED
+  TIMEOUT
+  CANCELLED
 }
