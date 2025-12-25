@@ -7,12 +7,12 @@ import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import {
-  ArrowLeft,
-  Eye,
-  EyeSlash,
-  Copy,
-  Check,
-  ArrowsClockwise,
+  ArrowLeftIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  CopyIcon,
+  CheckIcon,
+  ArrowsClockwiseIcon,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldError, FieldGroup } from "@/components/ui/field";
 import {
   Card,
@@ -89,6 +90,12 @@ export default function NewEndpointPage() {
   const slug = watch("slug");
   const secret = watch("secret");
   const currentName = watch("name");
+  const allowedEvents = watch("allowedEvents") ?? [];
+
+  // Get event types from selected provider
+  const providerEventTypes: string[] = selectedProvider?.eventTypes
+    ? (selectedProvider.eventTypes as string[])
+    : [];
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newName = e.target.value;
@@ -111,6 +118,26 @@ export default function NewEndpointPage() {
   const handleProviderSelect = (providerId: string) => {
     setSelectedProviderId(providerId);
     setValue("providerId", providerId);
+    // Reset allowed events when provider changes
+    setValue("allowedEvents", []);
+  };
+
+  const handleEventToggle = (eventType: string, checked: boolean) => {
+    if (checked) {
+      setValue("allowedEvents", [...allowedEvents, eventType]);
+    } else {
+      setValue("allowedEvents", allowedEvents.filter((e) => e !== eventType));
+    }
+  };
+
+  const handleSelectAllEvents = () => {
+    if (allowedEvents.length === providerEventTypes.length) {
+      // Deselect all
+      setValue("allowedEvents", []);
+    } else {
+      // Select all
+      setValue("allowedEvents", [...providerEventTypes]);
+    }
   };
 
   const onSubmit = async (data: EndpointFormData) => {
@@ -129,7 +156,7 @@ export default function NewEndpointPage() {
       {/* Back Button */}
       <Button variant="ghost" size="sm" asChild className="-ml-2">
         <Link href="/dashboard/endpoints">
-          <ArrowLeft className="size-4" />
+          <ArrowLeftIcon className="size-4" />
           Back to Endpoints
         </Link>
       </Button>
@@ -259,6 +286,58 @@ export default function NewEndpointPage() {
           </CardContent>
         </Card>
 
+        {/* Allowed Events */}
+        {selectedProvider && providerEventTypes.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Allowed Events</CardTitle>
+                  <CardDescription>
+                    Select which events this endpoint should receive. Leave empty to receive all events.
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSelectAllEvents}
+                >
+                  {allowedEvents.length === providerEventTypes.length ? "Deselect All" : "Select All"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {providerEventTypes.map((eventType) => (
+                  <label
+                    key={eventType}
+                    className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                  >
+                    <Checkbox
+                      checked={allowedEvents.includes(eventType)}
+                      onCheckedChange={(checked) =>
+                        handleEventToggle(eventType, checked === true)
+                      }
+                    />
+                    <span className="text-sm font-mono">{eventType}</span>
+                  </label>
+                ))}
+              </div>
+              {allowedEvents.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-3">
+                  No events selected — endpoint will receive all event types from {selectedProvider.displayName}.
+                </p>
+              )}
+              {allowedEvents.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-3">
+                  {allowedEvents.length} of {providerEventTypes.length} events selected.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Webhook URL Preview */}
         <Card>
           <CardHeader>
@@ -304,9 +383,9 @@ export default function NewEndpointPage() {
                       onClick={() => setShowSecret(!showSecret)}
                     >
                       {showSecret ? (
-                        <EyeSlash className="size-4" />
+                        <EyeSlashIcon className="size-4" />
                       ) : (
-                        <Eye className="size-4" />
+                        <EyeIcon className="size-4" />
                       )}
                     </Button>
                     <Button
@@ -317,9 +396,9 @@ export default function NewEndpointPage() {
                       onClick={copySecret}
                     >
                       {copied ? (
-                        <Check className="size-4 text-green-600" />
+                        <CheckIcon className="size-4 text-green-600" />
                       ) : (
-                        <Copy className="size-4" />
+                        <CopyIcon className="size-4" />
                       )}
                     </Button>
                   </div>
@@ -329,7 +408,7 @@ export default function NewEndpointPage() {
                   variant="outline"
                   onClick={regenerateSecret}
                 >
-                  <ArrowsClockwise className="size-4" />
+                  <ArrowsClockwiseIcon className="size-4" />
                   Regenerate
                 </Button>
               </div>
