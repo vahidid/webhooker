@@ -7,7 +7,7 @@ import {
   badRequestResponse,
   successResponse,
   errorResponse,
-} from "@/lib/api-utils";
+} from "@/types/api";
 import { createChannelSchema } from "@/lib/validations/channel";
 
 // GET /api/channels - List all channels for the current organization

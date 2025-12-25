@@ -6,7 +6,7 @@ import {
   notFoundResponse,
   successResponse,
   errorResponse,
-} from "@/lib/api-utils";
+} from "@/types/api";
 
 // GET /api/events/[id] - Get a single event with deliveries and attempts
 export async function GET(

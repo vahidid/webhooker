@@ -6,7 +6,7 @@ import {
   badRequestResponse,
   successResponse,
   errorResponse,
-} from "@/lib/api-utils";
+} from "@/types/api";
 import { createRouteSchema } from "@/lib/validations/route";
 
 // GET /api/routes - List all routes for the current organization

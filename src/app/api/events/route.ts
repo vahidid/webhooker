@@ -5,7 +5,7 @@ import {
   unauthorizedResponse,
   successResponse,
   errorResponse,
-} from "@/lib/api-utils";
+} from "@/types/api";
 
 // GET /api/events - List all events for the current organization
 export async function GET(req: NextRequest) {

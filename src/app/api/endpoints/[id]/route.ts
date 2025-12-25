@@ -7,7 +7,7 @@ import {
   badRequestResponse,
   successResponse,
   errorResponse,
-} from "@/lib/api-utils";
+} from "@/types/api";
 import { updateEndpointSchema } from "@/lib/validations/endpoint";
 
 // GET /api/endpoints/[id] - Get a single endpoint

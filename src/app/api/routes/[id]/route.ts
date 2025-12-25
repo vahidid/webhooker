@@ -7,7 +7,7 @@ import {
   badRequestResponse,
   successResponse,
   errorResponse,
-} from "@/lib/api-utils";
+} from "@/types/api";
 import { updateRouteSchema } from "@/lib/validations/route";
 
 // GET /api/routes/[id] - Get a single route

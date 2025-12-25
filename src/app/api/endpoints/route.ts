@@ -6,7 +6,7 @@ import {
   badRequestResponse,
   successResponse,
   errorResponse,
-} from "@/lib/api-utils";
+} from "@/types/api";
 import { createEndpointSchema } from "@/lib/validations/endpoint";
 
 // GET /api/endpoints - List all endpoints for the current organization

@@ -442,3 +442,13 @@ GET        /api/deliveries/[id]
 POST       /api/deliveries/[id]/retry
 GET        /api/deliveries/[id]/attempts
 ```
+
+---
+
+## Validation Structure
+
+The project uses Zod for validation. The validation schemas are located in the `src/lib/validations/` directory. Each schema corresponds to the data models and ensures that incoming data adheres to the expected formats.
+
+## Service Implementation
+
+Services must be implemented in the `src/services/` directory. For understanding the React Query hooks implementations, refer to the hooks defined in the same directory. These hooks wrap the service calls and manage the data fetching and caching logic effectively.

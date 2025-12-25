@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import {
   successResponse,
   errorResponse,
-} from "@/lib/api-utils";
+} from "@/types/api";
 
 // GET /api/providers - List all active providers (public, no auth required)
 export async function GET() {

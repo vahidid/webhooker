@@ -7,7 +7,7 @@ import {
   badRequestResponse,
   successResponse,
   errorResponse,
-} from "@/lib/api-utils";
+} from "@/types/api";
 import { updateChannelSchema } from "@/lib/validations/channel";
 
 // GET /api/channels/[id] - Get a single channel
