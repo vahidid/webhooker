@@ -452,3 +452,143 @@ The project uses Zod for validation. The validation schemas are located in the `
 ## Service Implementation
 
 Services must be implemented in the `src/services/` directory. For understanding the React Query hooks implementations, refer to the hooks defined in the same directory. These hooks wrap the service calls and manage the data fetching and caching logic effectively.
+
+---
+
+## Project Structure & Conventions
+
+This project uses a feature-based directory structure on top of Next.js App Router. The goal is to keep UI, hooks, services, validations, and API routes organized by domain while sharing common utilities.
+
+### Directory Layout (key paths)
+
+```
+src/
+  app/
+    api/                     # Backend route handlers per resource
+      channels/
+        [id]/
+        route.ts
+      endpoints/
+        [id]/
+        route.ts
+      events/
+        [id]/
+        route.ts
+      routes/
+        [id]/
+        route.ts
+      auth/
+      org/
+      providers/
+
+    dashboard/               # Feature pages (App Router)
+      channels/
+        page.tsx
+        new/
+          page.tsx
+      endpoints/
+        page.tsx
+        new/
+          page.tsx
+      routes/
+        page.tsx
+        new/
+          page.tsx
+      events/
+        page.tsx
+        [id]/
+          page.tsx
+      layout.tsx             # Dashboard layout
+
+    auth/                    # Auth pages (sign-in/up)
+    onboarding/              # Onboarding flow pages
+    globals.css              # Global styles
+    layout.tsx               # Root layout (includes React Query provider + Toaster)
+
+  components/
+    ui/                      # Reusable UI primitives
+      button.tsx, card.tsx, input.tsx, ...
+      skeleton.tsx
+    providers/
+      query-client/
+        index.tsx            # React Query client/provider setup
+    dashboard/               # (Optional) dashboard-specific components
+    organization/            # (Optional) organization components
+
+  features/                  # Feature-scoped UI pieces
+    channels/
+      list-skeleton/
+        index.tsx            # Channels list skeleton
+    endpoints/
+      list-skeleton/
+        index.tsx            # Endpoints list skeleton
+
+  hooks/                     # React Query hooks per resource
+    use-channels.ts
+    use-endpoints.ts
+    use-events.ts
+    use-routes.ts
+    use-providers.ts
+    use-organization.ts
+
+  services/                  # Axios service clients per resource
+    channel.service.ts
+    endpoint.service.ts
+    event.service.ts
+    route.service.ts
+    provider.service.ts
+    org.service.ts
+
+  lib/                       # Shared library code
+    apiClient.ts             # Axios instance + interceptors
+    queryKeys.ts             # Centralized React Query keys
+    validations/             # Zod schemas (Create/Update inputs)
+      channel.ts
+      endpoint.ts
+      route.ts
+      organization.ts
+    prisma.ts                # Prisma client
+    auth.ts                  # Auth helpers
+    actions/                 # Server actions (if any)
+    errors.ts                # Query client error routing
+    utils.ts                 # Generic utilities
+
+  types/
+    api.ts                   # ApiResponse, helpers, auth context
+    next-auth.d.ts           # NextAuth TS declarations
+
+  generated/
+    prisma/                  # Prisma generated types (custom path)
+      client.ts
+      models.ts
+      enums.ts
+
+  utils/
+    constants.ts             # Global constants
+```
+
+### Conventions
+
+- Pages: App Router under `src/app/...` organized by feature (e.g., `dashboard/endpoints`, `dashboard/channels`).
+- API Routes: One folder per resource under `src/app/api/<resource>`, with `[id]` sub-routes for item operations.
+- Services: One file per resource in `src/services/` named `<resource>.service.ts`, using `apiClient`.
+- Hooks: One file per resource in `src/hooks/` named `use-<resource>.ts`, wrapping services with React Query.
+- Query Keys: Centralized factory in `src/lib/queryKeys.ts` using `queryKeys.<resource>.<list|detail>()`.
+- Validations: Zod schemas in `src/lib/validations/` exporting `Create<Resource>Input` and `Update<Resource>Input`.
+- Types: Shared API helpers and response types in `src/types/api.ts` (e.g., `ApiSuccessResponse<T>`, `cursorPaginatedResponse()`).
+- UI: Reusable primitives in `src/components/ui/`; feature-specific UI in `src/features/<feature>/...`.
+- React Query Provider: `src/components/providers/query-client/index.tsx` with caches and error routing.
+- Prisma Types: Import from `@/generated/prisma/client` (custom generated path).
+
+### Adding a New Feature
+
+1. Create pages under `src/app/dashboard/<feature>/` (list, detail, new).
+2. Add API routes under `src/app/api/<feature>/` (`route.ts`, `[id]/route.ts`).
+3. Define Zod schemas in `src/lib/validations/<feature>.ts` (`Create/Update` inputs).
+4. Implement `src/services/<feature>.service.ts` using `apiClient`.
+5. Add hooks in `src/hooks/use-<feature>.ts` with query keys and cache invalidation.
+6. Add query keys in `src/lib/queryKeys.ts` (`queryKeys.<feature>.list/detail`).
+7. Create any feature-specific UI in `src/features/<feature>/` (e.g., skeletons, widgets).
+8. Wire pages to hooks and show loading, empty, error states with toasts.
+
+This structure keeps domain logic cohesive while promoting reuse of primitives, types, and helpers.
