@@ -2,22 +2,24 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, SpinnerGap } from "@phosphor-icons/react";
+import { ArrowRight, SpinnerGap, WarningCircle } from "@phosphor-icons/react";
 import { motion } from "framer-motion";
 
 import { signInSchema, type SignInFormData } from "@/lib/validations/auth";
+import { signInWithCredentials } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { FormField } from "@/components/auth/form-field";
-import { SocialAuthButtons } from "@/components/auth/social-auth-buttons";
-import { AuthDivider } from "@/components/auth/auth-divider";
 
 export default function SignInPage() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const {
     register,
@@ -38,13 +40,20 @@ export default function SignInPage() {
 
   const onSubmit = async (data: SignInFormData) => {
     setIsLoading(true);
+    setError(null);
+
     try {
-      // Simulate API call
-      console.log("Sign in data:", data);
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      // Handle successful sign in
-    } catch (error) {
-      console.error("Sign in error:", error);
+      const result = await signInWithCredentials(data.email, data.password);
+
+      if (result.success) {
+        router.push("/dashboard");
+        router.refresh();
+      } else {
+        setError(result.error || "Invalid email or password");
+      }
+    } catch (err) {
+      console.error("Sign in error:", err);
+      setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -65,6 +74,17 @@ export default function SignInPage() {
         </motion.div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Error Alert */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            <WarningCircle className="size-4 shrink-0" weight="fill" />
+            {error}
+          </motion.div>
+        )}
 
         {/* Email/Password Form */}
         <motion.form

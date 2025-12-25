@@ -2,23 +2,26 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, SpinnerGap } from "@phosphor-icons/react";
+import { ArrowRight, SpinnerGap, WarningCircle, CheckCircle } from "@phosphor-icons/react";
 import { motion } from "framer-motion";
 
 import { signUpSchema, type SignUpFormData } from "@/lib/validations/auth";
+import { signUpWithCredentials } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { FormField } from "@/components/auth/form-field";
-import { SocialAuthButtons } from "@/components/auth/social-auth-buttons";
-import { AuthDivider } from "@/components/auth/auth-divider";
 import { PasswordStrength } from "@/components/auth/password-strength";
 
 export default function SignUpPage() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const {
     register,
@@ -42,13 +45,23 @@ export default function SignUpPage() {
 
   const onSubmit = async (data: SignUpFormData) => {
     setIsLoading(true);
+    setError(null);
+
     try {
-      // Simulate API call
-      console.log("Sign up data:", data);
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      // Handle successful sign up
-    } catch (error) {
-      console.error("Sign up error:", error);
+      const result = await signUpWithCredentials(data);
+
+      if (result.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          router.push("/dashboard");
+          router.refresh();
+        }, 1500);
+      } else {
+        setError(result.error || "Something went wrong");
+      }
+    } catch (err) {
+      console.error("Sign up error:", err);
+      setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -69,6 +82,29 @@ export default function SignUpPage() {
         </motion.div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Success Message */}
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 rounded-lg border border-green-500/50 bg-green-500/10 p-3 text-sm text-green-600 dark:text-green-400"
+          >
+            <CheckCircle className="size-4 shrink-0" weight="fill" />
+            Account created successfully! Redirecting...
+          </motion.div>
+        )}
+
+        {/* Error Alert */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            <WarningCircle className="size-4 shrink-0" weight="fill" />
+            {error}
+          </motion.div>
+        )}
 
         {/* Registration Form */}
         <motion.form
