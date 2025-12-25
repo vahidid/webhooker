@@ -7,15 +7,20 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod/v3";
 import {
-  ArrowLeft,
-  TelegramLogo,
-  Eye,
-  EyeSlash,
-  PaperPlaneTilt,
-  CheckCircle,
-  XCircle,
-  SpinnerGap,
+  ArrowLeftIcon,
+  TelegramLogoIcon,
+  SlackLogoIcon,
+  DiscordLogoIcon,
+  EnvelopeIcon,
+  GlobeIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  PaperPlaneTiltIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  SpinnerGapIcon,
 } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,9 +33,52 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useCreateChannel } from "@/hooks/use-channels";
+import { createChannelSchema, channelTypeEnum } from "@/lib/validations/channel";
 
-const channelSchema = z.object({
+// Channel type configuration
+const channelTypes = [
+  {
+    value: "TELEGRAM" as const,
+    label: "Telegram",
+    description: "Send messages to a Telegram group or channel",
+    icon: TelegramLogoIcon,
+    color: "sky",
+  },
+  {
+    value: "SLACK" as const,
+    label: "Slack",
+    description: "Send messages to a Slack channel",
+    icon: SlackLogoIcon,
+    color: "purple",
+  },
+  {
+    value: "DISCORD" as const,
+    label: "Discord",
+    description: "Send messages to a Discord channel",
+    icon: DiscordLogoIcon,
+    color: "indigo",
+  },
+  {
+    value: "WEBHOOK" as const,
+    label: "Webhook",
+    description: "Send to any HTTP endpoint",
+    icon: GlobeIcon,
+    color: "gray",
+  },
+  {
+    value: "EMAIL" as const,
+    label: "Email",
+    description: "Send email notifications",
+    icon: EnvelopeIcon,
+    color: "orange",
+  },
+];
+
+// Form schema for Telegram channel (most common)
+const telegramFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
+  type: channelTypeEnum,
   botToken: z
     .string()
     .min(1, "Bot token is required")
@@ -48,30 +96,40 @@ const channelSchema = z.object({
     ),
 });
 
-type ChannelFormData = z.infer<typeof channelSchema>;
+type TelegramFormData = z.infer<typeof telegramFormSchema>;
 
 export default function NewChannelPage() {
   const router = useRouter();
   const [showToken, setShowToken] = useState(false);
+  const [selectedType, setSelectedType] = useState<typeof channelTypeEnum._type>("TELEGRAM");
   const [testStatus, setTestStatus] = useState<
     "idle" | "testing" | "success" | "error"
   >("idle");
   const [testError, setTestError] = useState<string | null>(null);
 
+  const createChannel = useCreateChannel();
+
   const {
     register,
     handleSubmit,
     getValues,
+    setValue,
     formState: { errors, isSubmitting },
-  } = useForm<ChannelFormData>({
-    resolver: zodResolver(channelSchema),
+  } = useForm<TelegramFormData>({
+    resolver: zodResolver(telegramFormSchema),
     defaultValues: {
       name: "",
+      type: "TELEGRAM",
       botToken: "",
       chatId: "",
       threadId: "",
     },
   });
+
+  const handleTypeSelect = (type: typeof channelTypeEnum._type) => {
+    setSelectedType(type);
+    setValue("type", type);
+  };
 
   const testConnection = async () => {
     const values = getValues();
@@ -98,12 +156,27 @@ export default function NewChannelPage() {
     }
   };
 
-  const onSubmit = async (data: ChannelFormData) => {
-    // TODO: Integrate with API
-    console.log("Creating channel:", data);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push("/dashboard/channels");
+  const onSubmit = async (data: TelegramFormData) => {
+    try {
+      // Transform form data to API format
+      const channelData = createChannelSchema.parse({
+        name: data.name,
+        type: data.type,
+        credentials: {
+          botToken: data.botToken,
+        },
+        config: {
+          chatId: data.chatId,
+          ...(data.threadId ? { threadId: data.threadId } : {}),
+        },
+      });
+
+      await createChannel.mutateAsync(channelData);
+      toast.success("Channel created successfully");
+      router.push("/dashboard/channels");
+    } catch {
+      toast.error("Failed to create channel");
+    }
   };
 
   return (
@@ -111,7 +184,7 @@ export default function NewChannelPage() {
       {/* Back Button */}
       <Button variant="ghost" size="sm" asChild className="-ml-2">
         <Link href="/dashboard/channels">
-          <ArrowLeft className="size-4" />
+          <ArrowLeftIcon className="size-4" />
           Back to Channels
         </Link>
       </Button>
@@ -134,16 +207,49 @@ export default function NewChannelPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-3 rounded-lg border border-sky-500/30 bg-sky-500/5 p-4">
-              <div className="flex size-12 items-center justify-center rounded-lg bg-sky-500/10">
-                <TelegramLogo className="size-6 text-sky-500" weight="fill" />
-              </div>
-              <div>
-                <p className="font-medium">Telegram</p>
-                <p className="text-sm text-muted-foreground">
-                  Send messages to a Telegram group or channel
-                </p>
-              </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {channelTypes.map((type) => {
+                const Icon = type.icon;
+                const isSelected = selectedType === type.value;
+                const colorClasses = {
+                  sky: isSelected ? "border-sky-500/30 bg-sky-500/5" : "",
+                  purple: isSelected ? "border-purple-500/30 bg-purple-500/5" : "",
+                  indigo: isSelected ? "border-indigo-500/30 bg-indigo-500/5" : "",
+                  gray: isSelected ? "border-gray-500/30 bg-gray-500/5" : "",
+                  orange: isSelected ? "border-orange-500/30 bg-orange-500/5" : "",
+                };
+                const iconColorClasses = {
+                  sky: "bg-sky-500/10 text-sky-500",
+                  purple: "bg-purple-500/10 text-purple-500",
+                  indigo: "bg-indigo-500/10 text-indigo-500",
+                  gray: "bg-gray-500/10 text-gray-500",
+                  orange: "bg-orange-500/10 text-orange-500",
+                };
+
+                return (
+                  <button
+                    key={type.value}
+                    type="button"
+                    onClick={() => handleTypeSelect(type.value)}
+                    disabled={type.value !== "TELEGRAM"} // Only Telegram is supported for now
+                    className={`flex items-center gap-3 rounded-lg border p-4 text-left transition-colors hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      isSelected
+                        ? colorClasses[type.color as keyof typeof colorClasses] + " border-primary"
+                        : "border-border"
+                    }`}
+                  >
+                    <div className={`flex size-10 items-center justify-center rounded-lg ${iconColorClasses[type.color as keyof typeof iconColorClasses]}`}>
+                      <Icon className="size-5" weight="fill" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium">{type.label}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-1">
+                        {type.value !== "TELEGRAM" ? "Coming soon" : type.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -197,9 +303,9 @@ export default function NewChannelPage() {
                     onClick={() => setShowToken(!showToken)}
                   >
                     {showToken ? (
-                      <EyeSlash className="size-4" />
+                      <EyeSlashIcon className="size-4" />
                     ) : (
-                      <Eye className="size-4" />
+                      <EyeIcon className="size-4" />
                     )}
                   </Button>
                 </div>
@@ -276,9 +382,9 @@ export default function NewChannelPage() {
                 disabled={testStatus === "testing"}
               >
                 {testStatus === "testing" ? (
-                  <SpinnerGap className="size-4 animate-spin" />
+                  <SpinnerGapIcon className="size-4 animate-spin" />
                 ) : (
-                  <PaperPlaneTilt className="size-4" />
+                  <PaperPlaneTiltIcon className="size-4" />
                 )}
                 {testStatus === "testing"
                   ? "Sending..."
@@ -287,14 +393,14 @@ export default function NewChannelPage() {
 
               {testStatus === "success" && (
                 <div className="flex items-center gap-1.5 text-sm text-green-600">
-                  <CheckCircle className="size-4" weight="fill" />
+                  <CheckCircleIcon className="size-4" weight="fill" />
                   Test message sent successfully!
                 </div>
               )}
 
               {testStatus === "error" && testError && (
                 <div className="flex items-center gap-1.5 text-sm text-red-600">
-                  <XCircle className="size-4" weight="fill" />
+                  <XCircleIcon className="size-4" weight="fill" />
                   {testError}
                 </div>
               )}
@@ -304,8 +410,8 @@ export default function NewChannelPage() {
 
         {/* Actions */}
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Creating..." : "Create Channel"}
+          <Button type="submit" disabled={isSubmitting || createChannel.isPending}>
+            {isSubmitting || createChannel.isPending ? "Creating..." : "Create Channel"}
           </Button>
           <Button type="button" variant="ghost" asChild>
             <Link href="/dashboard/channels">Cancel</Link>

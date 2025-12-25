@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import {
@@ -29,13 +29,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useProviders } from "@/hooks/use-providers";
-import { useCreateEndpoint } from "@/hooks/use-endpoints";
-import { createEndpointSchema } from "@/lib/validations/endpoint";
-import { z } from "zod/v3";
-
-// Form input type (before transforms)
-type EndpointFormData = z.input<typeof createEndpointSchema>;
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useEndpoint, useUpdateEndpoint } from "@/hooks/use-endpoints";
+import {
+  updateEndpointSchema,
+  UpdateEndpointInput,
+} from "@/lib/validations/endpoint";
 
 function generateSecret(): string {
   const chars =
@@ -55,74 +61,134 @@ function slugify(text: string): string {
     .substring(0, 50);
 }
 
-export default function NewEndpointPage() {
+const statusOptions = [
+  { value: "ACTIVE", label: "Active", color: "bg-green-500/10 text-green-600" },
+  { value: "PAUSED", label: "Paused", color: "bg-yellow-500/10 text-yellow-600" },
+  { value: "DISABLED", label: "Disabled", color: "bg-gray-500/10 text-gray-600" },
+];
+
+export default function EditEndpointPage() {
   const router = useRouter();
+  const params = useParams();
+  const endpointId = params.id as string;
+  
   const [showSecret, setShowSecret] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const orgSlug = "acme-inc"; // Will come from context
 
-  const { data: providersData, isLoading: isLoadingProviders } = useProviders();
-  const createEndpoint = useCreateEndpoint();
+  const { data: endpointData, isLoading, error } = useEndpoint(endpointId);
+  const updateEndpoint = useUpdateEndpoint();
 
-  const providers = providersData?.success ? providersData.data : [];
-  const selectedProvider = providers.find((p) => p.id === selectedProviderId);
+  const endpoint = endpointData?.success ? endpointData.data : undefined;
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<EndpointFormData>({
-    resolver: zodResolver(createEndpointSchema),
+    reset,
+    formState: { errors, isSubmitting, isDirty },
+  } = useForm<UpdateEndpointInput>({
+    resolver: zodResolver(updateEndpointSchema),
     defaultValues: {
       name: "",
       slug: "",
       description: "",
-      secret: generateSecret(),
-      providerId: "",
-      allowedEvents: [],
+      secret: "",
+      status: "ACTIVE",
     },
   });
+
+  // Populate form when endpoint data is loaded
+  useEffect(() => {
+    if (endpoint) {
+      reset({
+        name: endpoint.name,
+        slug: endpoint.slug,
+        description: endpoint.description ?? "",
+        secret: endpoint.secret ?? undefined,
+        status: endpoint.status,
+      });
+    }
+  }, [endpoint, reset]);
 
   const slug = watch("slug");
   const secret = watch("secret");
   const currentName = watch("name");
+  const status = watch("status");
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newName = e.target.value;
+    const currentSlug = slug ?? "";
+    const previousName = currentName ?? "";
     // Only auto-update slug if it was empty or matches the slugified version of the previous name
-    if (!slug || slug === slugify(currentName)) {
+    if (!currentSlug || currentSlug === slugify(previousName)) {
       setValue("slug", slugify(newName));
     }
   };
 
   const copySecret = () => {
-    navigator.clipboard.writeText(secret);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (secret) {
+      navigator.clipboard.writeText(secret);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const regenerateSecret = () => {
-    setValue("secret", generateSecret());
+    setValue("secret", generateSecret(), { shouldDirty: true });
   };
 
-  const handleProviderSelect = (providerId: string) => {
-    setSelectedProviderId(providerId);
-    setValue("providerId", providerId);
-  };
-
-  const onSubmit = async (data: EndpointFormData) => {
+  const onSubmit = async (data: UpdateEndpointInput) => {
     try {
-      const validatedData = createEndpointSchema.parse(data);
-      await createEndpoint.mutateAsync(validatedData);
-      toast.success("Endpoint created successfully");
+      await updateEndpoint.mutateAsync({
+        id: endpointId,
+        data,
+      });
+      toast.success("Endpoint updated successfully");
       router.push("/dashboard/endpoints");
     } catch {
-      toast.error("Failed to create endpoint");
+      toast.error("Failed to update endpoint");
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <Skeleton className="h-8 w-40" />
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="mt-2 h-5 w-72" />
+        </div>
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-60 w-full" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+
+  if (error || !endpoint) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <Button variant="ghost" size="sm" asChild className="-ml-2">
+          <Link href="/dashboard/endpoints">
+            <ArrowLeft className="size-4" />
+            Back to Endpoints
+          </Link>
+        </Button>
+        <Card className="border-destructive">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <p className="text-destructive">
+              Failed to load endpoint. It may have been deleted.
+            </p>
+            <Button asChild className="mt-4">
+              <Link href="/dashboard/endpoints">Return to Endpoints</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -135,15 +201,29 @@ export default function NewEndpointPage() {
       </Button>
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Create Endpoint</h1>
-        <p className="text-muted-foreground">
-          Set up a new webhook endpoint to receive events
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Edit Endpoint</h1>
+          <p className="text-muted-foreground">
+            Modify your webhook endpoint settings
+          </p>
+        </div>
+        <Badge
+          variant="outline"
+          className={
+            status === "ACTIVE"
+              ? "bg-green-500/10 text-green-600 border-green-500/20"
+              : status === "PAUSED"
+              ? "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"
+              : "bg-gray-500/10 text-gray-600 border-gray-500/20"
+          }
+        >
+          {status}
+        </Badge>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Provider Selection */}
+        {/* Provider Info (read-only) */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Provider</CardTitle>
@@ -152,57 +232,78 @@ export default function NewEndpointPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoadingProviders ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <Skeleton key={i} className="h-20 w-full" />
-                ))}
+            <div className="flex items-center gap-3 rounded-lg border p-4 bg-muted/30">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
+                {endpoint.provider?.iconUrl ? (
+                  <Image
+                    src={endpoint.provider.iconUrl}
+                    alt={endpoint.provider.displayName}
+                    width={24}
+                    height={24}
+                    className="size-6"
+                  />
+                ) : (
+                  <span className="text-sm font-medium">
+                    {endpoint.provider?.displayName?.charAt(0) ?? "?"}
+                  </span>
+                )}
               </div>
-            ) : providers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No providers available.</p>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {providers.map((provider) => (
-                  <button
-                    key={provider.id}
-                    type="button"
-                    onClick={() => handleProviderSelect(provider.id)}
-                    className={`flex items-center gap-3 rounded-lg border p-4 text-left transition-colors hover:bg-muted/50 ${
-                      selectedProviderId === provider.id
-                        ? "border-primary bg-primary/5"
-                        : "border-border"
-                    }`}
-                  >
-                    <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
-                      {provider.iconUrl ? (
-                        <Image
-                          src={provider.iconUrl}
-                          alt={provider.displayName}
-                          width={24}
-                          height={24}
-                          className="size-6"
+              <div>
+                <p className="font-medium">{endpoint.provider?.displayName}</p>
+                <p className="text-xs text-muted-foreground">
+                  Provider cannot be changed after creation
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Status */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Status</CardTitle>
+            <CardDescription>
+              Control whether this endpoint receives webhooks
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Field>
+              <Select
+                value={status}
+                onValueChange={(value) =>
+                  setValue("status", value as "ACTIVE" | "PAUSED" | "DISABLED", {
+                    shouldDirty: true,
+                  })
+                }
+              >
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {statusOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`size-2 rounded-full ${
+                            option.value === "ACTIVE"
+                              ? "bg-green-500"
+                              : option.value === "PAUSED"
+                              ? "bg-yellow-500"
+                              : "bg-gray-500"
+                          }`}
                         />
-                      ) : (
-                        <span className="text-sm font-medium">
-                          {provider.displayName.charAt(0)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-medium">{provider.displayName}</p>
-                      {provider.description && (
-                        <p className="text-xs text-muted-foreground line-clamp-1">
-                          {provider.description}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-            {errors.providerId && (
-              <FieldError className="mt-2">{errors.providerId.message}</FieldError>
-            )}
+                        {option.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-2">
+                {status === "ACTIVE" && "Endpoint is receiving webhooks normally."}
+                {status === "PAUSED" && "Webhooks will be queued but not processed."}
+                {status === "DISABLED" && "Webhooks will be rejected."}
+              </p>
+            </Field>
           </CardContent>
         </Card>
 
@@ -264,7 +365,7 @@ export default function NewEndpointPage() {
           <CardHeader>
             <CardTitle className="text-base">Webhook URL</CardTitle>
             <CardDescription>
-              Configure this URL in your {selectedProvider?.displayName ?? "provider"} settings
+              Configure this URL in your {endpoint.provider?.displayName ?? "provider"} settings
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -282,7 +383,7 @@ export default function NewEndpointPage() {
           <CardHeader>
             <CardTitle className="text-base">Webhook Secret</CardTitle>
             <CardDescription>
-              Used to verify webhook signatures from {selectedProvider?.displayName ?? "your provider"}. Keep this secure.
+              Used to verify webhook signatures from {endpoint.provider?.displayName ?? "your provider"}. Keep this secure.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -335,7 +436,7 @@ export default function NewEndpointPage() {
               </div>
               {errors.secret && <FieldError>{errors.secret.message}</FieldError>}
               <p className="text-xs text-muted-foreground">
-                Copy this secret and paste it into your {selectedProvider?.displayName ?? "provider"} webhook settings.
+                Copy this secret and paste it into your {endpoint.provider?.displayName ?? "provider"} webhook settings.
               </p>
             </Field>
           </CardContent>
@@ -343,8 +444,11 @@ export default function NewEndpointPage() {
 
         {/* Actions */}
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={isSubmitting || createEndpoint.isPending}>
-            {isSubmitting || createEndpoint.isPending ? "Creating..." : "Create Endpoint"}
+          <Button
+            type="submit"
+            disabled={isSubmitting || updateEndpoint.isPending || !isDirty}
+          >
+            {isSubmitting || updateEndpoint.isPending ? "Saving..." : "Save Changes"}
           </Button>
           <Button type="button" variant="ghost" asChild>
             <Link href="/dashboard/endpoints">Cancel</Link>

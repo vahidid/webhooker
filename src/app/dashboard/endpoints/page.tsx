@@ -194,7 +194,7 @@ export default function EndpointsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
-                          <Link href={`/dashboard/endpoints/${endpoint.id}`}>
+                          <Link href={`/dashboard/endpoints/${endpoint.id}/edit`}>
                             <Pencil className="size-4" />
                             Edit
                           </Link>

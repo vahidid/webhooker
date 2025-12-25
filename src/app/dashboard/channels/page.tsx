@@ -53,7 +53,7 @@ export default function ChannelsPage() {
         data: { status: newStatus },
       });
       toast.success(`Channel ${newStatus === "ACTIVE" ? "resumed" : "paused"} successfully`);
-    } catch (error) {
+    } catch {
       toast.error("Failed to update channel status");
     }
   };
@@ -66,7 +66,7 @@ export default function ChannelsPage() {
     try {
       await deleteChannel.mutateAsync(id);
       toast.success("Channel deleted successfully");
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete channel");
     }
   };
@@ -185,7 +185,7 @@ export default function ChannelsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
-                            <Link href={`/dashboard/channels/${channel.id}`}>
+                            <Link href={`/dashboard/channels/${channel.id}/edit`}>
                               <Pencil className="size-4" />
                               Edit
                             </Link>
