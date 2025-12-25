@@ -37,7 +37,7 @@ export default async function DashboardLayout({
         }}
       />
       <main className="flex-1 overflow-y-auto">
-        <div className="p-8">{children}</div>
+        <div className="min-h-full p-8">{children}</div>
       </main>
     </div>
   );
