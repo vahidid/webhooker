@@ -4,12 +4,7 @@
  * Used for autocomplete suggestions in the message template editor.
  */
 
-export interface PayloadField {
-  path: string;
-  label: string;
-  type: "string" | "number" | "boolean" | "object" | "array";
-  description?: string;
-}
+import type { PayloadField, ProviderPayloadSchemas } from "./types";
 
 // Common fields that appear in most GitLab webhook payloads
 const commonFields: PayloadField[] = [
@@ -225,19 +220,30 @@ const wikiPageFields: PayloadField[] = [
   { path: "object_attributes.message", label: "object_attributes.message", type: "string", description: "Commit message" },
 ];
 
-// Map event types to their payload fields
-export const gitlabEventPayloadFields: Record<string, PayloadField[]> = {
-  push: pushFields,
-  tag_push: tagPushFields,
-  merge_request: mergeRequestFields,
-  issue: issueFields,
-  note: noteFields,
-  pipeline: pipelineFields,
-  job: jobFields,
-  deployment: deploymentFields,
-  release: releaseFields,
-  wiki_page: wikiPageFields,
+/**
+ * GitLab provider payload schemas
+ * Maps event types to their payload field definitions
+ */
+export const gitlabPayloadSchemas: ProviderPayloadSchemas = {
+  common: commonFields,
+  events: {
+    push: pushFields,
+    tag_push: tagPushFields,
+    merge_request: mergeRequestFields,
+    issue: issueFields,
+    note: noteFields,
+    pipeline: pipelineFields,
+    job: jobFields,
+    deployment: deploymentFields,
+    release: releaseFields,
+    wiki_page: wikiPageFields,
+  },
 };
+
+/**
+ * @deprecated Use gitlabPayloadSchemas.events instead
+ */
+export const gitlabEventPayloadFields: Record<string, PayloadField[]> = gitlabPayloadSchemas.events;
 
 /**
  * Get all unique payload fields for given event types
@@ -245,13 +251,13 @@ export const gitlabEventPayloadFields: Record<string, PayloadField[]> = {
 export function getPayloadFieldsForEvents(eventTypes: string[]): PayloadField[] {
   if (eventTypes.length === 0) {
     // Return common fields if no specific events selected
-    return commonFields;
+    return gitlabPayloadSchemas.common;
   }
 
   const fieldsMap = new Map<string, PayloadField>();
   
   for (const eventType of eventTypes) {
-    const fields = gitlabEventPayloadFields[eventType] || commonFields;
+    const fields = gitlabPayloadSchemas.events[eventType] || gitlabPayloadSchemas.common;
     for (const field of fields) {
       if (!fieldsMap.has(field.path)) {
         fieldsMap.set(field.path, field);

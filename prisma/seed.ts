@@ -20,9 +20,10 @@ const providers = [
       "deployment",
       "release",
       "wiki_page",
+      "commit"
     ],
     docsUrl: "https://docs.gitlab.com/ee/user/project/integrations/webhooks.html",
-  },
+  }
 ];
 
 async function main() {

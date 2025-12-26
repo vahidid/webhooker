@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { getPayloadFieldsForEvents, type PayloadField } from "@/lib/providers/gitlab";
+import { getPayloadFieldsForProvider, type PayloadField } from "@/lib/providers";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import {
 interface MessageTemplateEditorProps {
   value: string;
   onChange: (value: string) => void;
-  eventTypes: string[];
+  providerName?: string;
   placeholder?: string;
   className?: string;
 }
@@ -25,15 +25,15 @@ interface MessageTemplateEditorProps {
 export function MessageTemplateEditor({
   value,
   onChange,
-  eventTypes,
+  providerName,
   placeholder,
   className,
 }: MessageTemplateEditorProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fields = useMemo<PayloadField[]>(
-    () => getPayloadFieldsForEvents(eventTypes),
-    [eventTypes]
+    () => providerName ? getPayloadFieldsForProvider(providerName, []) : [],
+    [providerName]
   );
 
   return (
@@ -62,7 +62,7 @@ export function MessageTemplateEditor({
               <div className="space-y-2">
                 {fields.length === 0 && (
                   <p className="text-sm text-muted-foreground">
-                    Select event types to see payload fields.
+                    Select an endpoint to see available payload fields.
                   </p>
                 )}
                 {fields.map((field) => (
