@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma";
 import {
   getAuthenticatedOrganization,
   unauthorizedResponse,
-  successResponse,
+  cursorPaginatedResponse,
   errorResponse,
 } from "@/types/api";
 
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     const endpointIds = endpoints.map((e) => e.id);
 
     if (endpointIds.length === 0) {
-      return successResponse({ events: [], nextCursor: null });
+      return cursorPaginatedResponse([], null);
     }
 
     const events = await prisma.event.findMany({
@@ -56,14 +56,6 @@ export async function GET(req: NextRequest) {
             id: true,
             name: true,
             slug: true,
-            provider: {
-              select: {
-                id: true,
-                name: true,
-                displayName: true,
-                iconUrl: true,
-              },
-            },
           },
         },
         _count: {
@@ -81,10 +73,7 @@ export async function GET(req: NextRequest) {
     const eventsToReturn = hasMore ? events.slice(0, limit) : events;
     const nextCursor = hasMore ? eventsToReturn[eventsToReturn.length - 1]?.id : null;
 
-    return successResponse({
-      events: eventsToReturn,
-      nextCursor,
-    });
+    return cursorPaginatedResponse(eventsToReturn, nextCursor);
   } catch (error) {
     console.error("Error fetching events:", error);
     return errorResponse("Failed to fetch events");

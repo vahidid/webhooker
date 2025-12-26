@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   GitlabLogoSimple,
@@ -25,111 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-// Mock data - will be replaced with real data from API
-const mockEvent = {
-  id: "evt_1",
-  endpoint: {
-    id: "1",
-    name: "Production GitLab",
-    slug: "production-gitlab",
-    provider: { name: "gitlab", displayName: "GitLab" },
-  },
-  eventType: "Merge Request Hook",
-  status: "PROCESSED" as const,
-  receivedAt: new Date("2024-12-24T14:32:15"),
-  headers: {
-    "content-type": "application/json",
-    "x-gitlab-event": "Merge Request Hook",
-    "x-gitlab-token": "***",
-    "x-gitlab-instance": "https://gitlab.com",
-  },
-  body: {
-    object_kind: "merge_request",
-    event_type: "merge_request",
-    user: {
-      id: 123,
-      name: "John Doe",
-      username: "johndoe",
-      avatar_url: "https://gitlab.com/uploads/-/system/user/avatar/123/avatar.png",
-    },
-    project: {
-      id: 456,
-      name: "my-project",
-      web_url: "https://gitlab.com/acme/my-project",
-    },
-    object_attributes: {
-      id: 789,
-      iid: 42,
-      title: "Fix authentication bug",
-      description: "This MR fixes the login issue reported in #123",
-      action: "open",
-      state: "opened",
-      source_branch: "fix/auth-bug",
-      target_branch: "main",
-      url: "https://gitlab.com/acme/my-project/-/merge_requests/42",
-    },
-  },
-  deliveries: [
-    {
-      id: "del_1",
-      route: {
-        id: "1",
-        name: "Merge Requests to Dev Team",
-      },
-      channel: {
-        id: "1",
-        name: "Dev Team Notifications",
-        type: "TELEGRAM",
-      },
-      status: "SUCCESSFUL" as const,
-      attempts: [
-        {
-          id: "att_1",
-          status: "SUCCESSFUL" as const,
-          trigger: "INITIAL" as const,
-          responseCode: 200,
-          responseTime: 342,
-          error: null,
-          attemptedAt: new Date("2024-12-24T14:32:16"),
-        },
-      ],
-    },
-    {
-      id: "del_2",
-      route: {
-        id: "2",
-        name: "All MRs to Alerts",
-      },
-      channel: {
-        id: "2",
-        name: "Alerts Channel",
-        type: "TELEGRAM",
-      },
-      status: "FAILED" as const,
-      attempts: [
-        {
-          id: "att_2",
-          status: "FAILED" as const,
-          trigger: "INITIAL" as const,
-          responseCode: 429,
-          responseTime: 156,
-          error: "Too Many Requests",
-          attemptedAt: new Date("2024-12-24T14:32:16"),
-        },
-        {
-          id: "att_3",
-          status: "SUCCESSFUL" as const,
-          trigger: "AUTOMATIC_RETRY" as const,
-          responseCode: 200,
-          responseTime: 289,
-          error: null,
-          attemptedAt: new Date("2024-12-24T14:33:18"),
-        },
-      ],
-    },
-  ],
-};
+import { useEvent } from "@/hooks/use-events";
 
 const statusColors = {
   RECEIVED: "bg-blue-500/10 text-blue-600 border-blue-500/20",
@@ -174,9 +70,15 @@ export default function EventDetailPage({
 }) {
   const { id } = use(params);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [expandedDeliveries, setExpandedDeliveries] = useState<string[]>(
-    mockEvent.deliveries.map((d) => d.id)
-  );
+  const { data, isLoading, isError } = useEvent(id);
+  const event = useMemo(() => (data?.success ? data.data : null), [data]);
+  const [expandedDeliveries, setExpandedDeliveries] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (event?.deliveries) {
+      setExpandedDeliveries(event.deliveries.map((d: any) => d.id));
+    }
+  }, [event?.deliveries]);
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -192,9 +94,47 @@ export default function EventDetailPage({
     );
   };
 
-  // In real app, fetch event by id
-  // Using id to demonstrate it would be used to fetch the correct event
-  const event = id ? mockEvent : mockEvent;
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Button variant="ghost" size="sm" asChild className="-ml-2">
+          <Link href="/dashboard/events">
+            <ArrowLeft className="size-4" />
+            Back to Events
+          </Link>
+        </Button>
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="rounded-full bg-muted p-4 mb-4">
+              <Clock className="size-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold mb-1">Loading event…</h3>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isError || !event) {
+    return (
+      <div className="space-y-6">
+        <Button variant="ghost" size="sm" asChild className="-ml-2">
+          <Link href="/dashboard/events">
+            <ArrowLeft className="size-4" />
+            Back to Events
+          </Link>
+        </Button>
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="rounded-full bg-muted p-4 mb-4">
+              <XCircle className="size-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold mb-1">Event not found</h3>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -220,13 +160,16 @@ export default function EventDetailPage({
               <h1 className="text-2xl font-bold tracking-tight">
                 {event.eventType}
               </h1>
-              <Badge variant="outline" className={statusColors[event.status]}>
+              <Badge
+                variant="outline"
+                className={statusColors[event.status as keyof typeof statusColors]}
+              >
                 {event.status.toLowerCase()}
               </Badge>
             </div>
             <p className="text-muted-foreground">
               From {event.endpoint.name} •{" "}
-              {event.receivedAt.toLocaleString()}
+              {new Date(event.receivedAt).toLocaleString()}
             </p>
           </div>
         </div>
@@ -265,7 +208,7 @@ export default function EventDetailPage({
             </CardHeader>
             <CardContent>
               <div className="rounded-lg bg-muted/50 p-3 font-mono text-xs overflow-auto max-h-48">
-                {Object.entries(event.headers).map(([key, value]) => (
+                {Object.entries(event.headers as Record<string, any>).map(([key, value]) => (
                   <div key={key} className="flex">
                     <span className="text-muted-foreground shrink-0 w-40">
                       {key}:
@@ -315,7 +258,7 @@ export default function EventDetailPage({
             Deliveries ({event.deliveries.length})
           </h2>
 
-          {event.deliveries.map((delivery) => (
+          {event.deliveries.map((delivery: any) => (
             <Card key={delivery.id}>
               <CardHeader className="pb-3">
                 <button
@@ -341,7 +284,11 @@ export default function EventDetailPage({
                   <div className="flex items-center gap-2">
                     <Badge
                       variant="outline"
-                      className={deliveryStatusColors[delivery.status]}
+                      className={
+                        deliveryStatusColors[
+                          delivery.status as keyof typeof deliveryStatusColors
+                        ]
+                      }
                     >
                       {delivery.status.toLowerCase()}
                     </Badge>
@@ -361,9 +308,11 @@ export default function EventDetailPage({
                       Attempts ({delivery.attempts.length})
                     </p>
                     <div className="space-y-2">
-                      {delivery.attempts.map((attempt, index) => {
+                      {delivery.attempts.map((attempt: any, index: number) => {
                         const AttemptIcon =
-                          attemptStatusIcons[attempt.status] || Clock;
+                          attemptStatusIcons[
+                            attempt.status as keyof typeof attemptStatusIcons
+                          ] || Clock;
                         const isSuccess = attempt.status === "SUCCESSFUL";
 
                         return (
@@ -381,26 +330,28 @@ export default function EventDetailPage({
                                   Attempt {index + 1}
                                 </span>
                                 <Badge variant="secondary" className="text-xs">
-                                  {triggerLabels[attempt.trigger]}
+                                  {
+                                    triggerLabels[
+                                      attempt.trigger as keyof typeof triggerLabels
+                                    ]
+                                  }
                                 </Badge>
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                {attempt.attemptedAt.toLocaleTimeString()}
-                                {attempt.error && (
+                                {new Date(attempt.startedAt).toLocaleTimeString()}
+                                {attempt.errorMessage && (
                                   <span className="text-red-600 ml-2">
-                                    {attempt.error}
+                                    {attempt.errorMessage}
                                   </span>
                                 )}
                               </div>
                             </div>
                             <div className="text-right shrink-0">
-                              <div
-                                className={`font-mono text-sm ${isSuccess ? "text-green-600" : "text-red-600"}`}
-                              >
-                                {attempt.responseCode}
+                              <div className={`font-mono text-sm ${isSuccess ? "text-green-600" : "text-red-600"}`}>
+                                {attempt.responseStatus ?? "-"}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                {attempt.responseTime}ms
+                                {attempt.durationMs ?? 0}ms
                               </div>
                             </div>
                           </div>
