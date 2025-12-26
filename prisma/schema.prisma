@@ -230,6 +230,10 @@ model Route {
   // e.g., "$.action == 'opened' && $.pull_request.base.ref == 'main'"
   filterExpression String?
 
+  // Inline message content (Handlebars template)
+  // Alternative to using a MessageTemplate reference
+  messageContent String? @db.Text
+
   // Delay before delivery (in seconds)
   delaySeconds Int @default(0)
 

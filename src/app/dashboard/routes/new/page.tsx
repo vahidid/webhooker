@@ -20,7 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldError, FieldGroup } from "@/components/ui/field";
 import {
@@ -46,6 +45,7 @@ import {
 import { useEndpoints } from "@/hooks/use-endpoints";
 import { useChannels } from "@/hooks/use-channels";
 import { useCreateRoute } from "@/hooks/use-routes";
+import { MessageTemplateEditor } from "@/features/routes/message-template-editor";
 import type { EndpointWithRelations } from "@/services/endpoint.service";
 import type { ChannelWithRelations } from "@/services/channel.service";
 
@@ -167,12 +167,12 @@ export default function NewRoutePage() {
         endpointId: data.endpointId,
         channelId: data.channelId,
         filterExpression,
+        messageContent: data.messageTemplate || null,
         retryStrategy: data.retryStrategy,
         retryCount: data.retryCount,
         delaySeconds: 0,
         retryIntervalMs: 60000,
         priority: 0,
-        // Note: messageTemplate will be handled when we add template support
       });
       
       toast.success("Route created successfully");
@@ -441,8 +441,10 @@ export default function NewRoutePage() {
                 Message{" "}
                 <span className="text-muted-foreground">(optional)</span>
               </Label>
-              <Textarea
-                id="messageTemplate"
+              <MessageTemplateEditor
+                value={watch("messageTemplate") || ""}
+                onChange={(value) => setValue("messageTemplate", value)}
+                eventTypes={selectedEvents}
                 placeholder={`Example:
 🔔 **{{payload.object_kind}}** in {{payload.project.name}}
 
@@ -450,13 +452,7 @@ export default function NewRoutePage() {
 by {{payload.user.name}}
 
 [View Details]({{payload.object_attributes.url}})`}
-                rows={6}
-                className="font-mono text-sm"
-                {...register("messageTemplate")}
               />
-              <p className="text-xs text-muted-foreground">
-                Use Handlebars syntax to access webhook payload fields. Leave empty to pass through raw payload.
-              </p>
             </Field>
           </CardContent>
         </Card>
