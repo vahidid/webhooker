@@ -18,6 +18,7 @@ interface MessageTemplateEditorProps {
   value: string;
   onChange: (value: string) => void;
   providerName?: string;
+  eventType?: string;
   placeholder?: string;
   className?: string;
 }
@@ -26,14 +27,17 @@ export function MessageTemplateEditor({
   value,
   onChange,
   providerName,
+  eventType,
   placeholder,
   className,
 }: MessageTemplateEditorProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fields = useMemo<PayloadField[]>(
-    () => providerName ? getPayloadFieldsForProvider(providerName, []) : [],
-    [providerName]
+    () => providerName 
+      ? getPayloadFieldsForProvider(providerName, eventType ? [eventType] : []) 
+      : [],
+    [providerName, eventType]
   );
 
   return (
@@ -62,7 +66,12 @@ export function MessageTemplateEditor({
               <div className="space-y-2">
                 {fields.length === 0 && (
                   <p className="text-sm text-muted-foreground">
-                    Select an endpoint to see available payload fields.
+                    {!providerName 
+                      ? "Select an endpoint to see available payload fields."
+                      : !eventType
+                        ? "Select an event type to see available payload fields."
+                        : "No payload fields defined for this event type."
+                    }
                   </p>
                 )}
                 {fields.map((field) => (

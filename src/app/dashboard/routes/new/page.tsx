@@ -25,7 +25,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldError, FieldGroup } from "@/components/ui/field";
 import {
@@ -78,6 +77,7 @@ const routeFormSchema = z.object({
   description: z.string().max(500).optional(),
   endpointId: z.string().min(1, "Source endpoint is required"),
   channelId: z.string().min(1, "Destination channel is required"),
+  eventType: z.string().min(1, "Event type is required"),
   filterExpression: z.string().max(1000).optional(),
   messageContent: z.string().max(10000).optional(),
   delaySeconds: z.coerce.number().int().min(0).max(3600),
@@ -112,7 +112,6 @@ export default function CreateRoutePage() {
     useState<EndpointWithRelations | null>(null);
   const [selectedChannel, setSelectedChannel] =
     useState<ChannelWithRelations | null>(null);
-  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Data fetching
@@ -158,6 +157,7 @@ export default function CreateRoutePage() {
       description: "",
       endpointId: "",
       channelId: "",
+      eventType: "",
       filterExpression: "",
       messageContent: "",
       delaySeconds: 0,
@@ -170,40 +170,18 @@ export default function CreateRoutePage() {
 
   const retryStrategy = watch("retryStrategy");
   const filterExpression = watch("filterExpression");
-
-  // Build filter expression from selected events
-  const buildEventFilter = (): string | undefined => {
-    if (!selectedEvents.length || !selectedEndpoint) return undefined;
-
-    const providerName = selectedEndpoint.provider?.name;
-    const headerName =
-      providerName === "github"
-        ? "x-github-event"
-        : providerName === "gitlab"
-          ? "x-gitlab-event"
-          : "x-webhook-event";
-
-    const conditions = selectedEvents.map(
-      (event) => `$.headers['${headerName}'] == '${event}'`
-    );
-
-    return conditions.length === 1
-      ? conditions[0]
-      : `(${conditions.join(" || ")})`;
-  };
+  const selectedEventType = watch("eventType");
 
   // Form submission
   const onSubmit = async (data: RouteFormData) => {
     try {
-      // Use custom filter or auto-generate from selected events
-      const finalFilter = data.filterExpression || buildEventFilter();
-
       await createRoute.mutateAsync({
         name: data.name,
         description: data.description || undefined,
         endpointId: data.endpointId,
         channelId: data.channelId,
-        filterExpression: finalFilter,
+        eventType: data.eventType,
+        filterExpression: data.filterExpression || undefined,
         messageContent: data.messageContent || null,
         delaySeconds: data.delaySeconds,
         retryStrategy: data.retryStrategy,
@@ -224,7 +202,7 @@ export default function CreateRoutePage() {
   const handleEndpointSelect = (endpoint: EndpointWithRelations) => {
     setSelectedEndpoint(endpoint);
     setValue("endpointId", endpoint.id);
-    setSelectedEvents([]); // Reset events when endpoint changes
+    setValue("eventType", ""); // Reset event type when endpoint changes
   };
 
   // Handle channel selection
@@ -233,11 +211,9 @@ export default function CreateRoutePage() {
     setValue("channelId", channel.id);
   };
 
-  // Toggle event selection
-  const toggleEvent = (event: string, checked: boolean) => {
-    setSelectedEvents((prev) =>
-      checked ? [...prev, event] : prev.filter((e) => e !== event)
-    );
+  // Handle event type selection
+  const handleEventTypeSelect = (eventType: string) => {
+    setValue("eventType", eventType);
   };
 
   // Get provider icon
@@ -555,175 +531,144 @@ export default function CreateRoutePage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Event Selection */}
-            {selectedEndpoint && availableEvents.length > 0 ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Event Types</p>
-                    <p className="text-xs text-muted-foreground">
-                      {selectedEvents.length === 0
-                        ? "All events will be routed"
-                        : `${selectedEvents.length} of ${availableEvents.length} selected`}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedEvents(availableEvents)}
-                    >
-                      Select All
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedEvents([])}
-                    >
-                      Clear
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {availableEvents.map((event) => (
-                    <label
-                      key={event}
-                      className={cn(
-                        "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
-                        selectedEvents.includes(event)
-                          ? "border-primary bg-primary/5"
-                          : "hover:bg-muted/50"
-                      )}
-                    >
-                      <Checkbox
-                        checked={selectedEvents.includes(event)}
-                        onCheckedChange={(checked) =>
-                          toggleEvent(event, checked === true)
-                        }
-                      />
-                      <span className="text-sm font-mono">{event}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ) : selectedEndpoint ? (
-              <div className="rounded-lg border border-dashed p-6 text-center">
-                <p className="text-sm text-muted-foreground">
-                  No specific events configured. All events from{" "}
-                  <span className="font-medium">{selectedEndpoint.name}</span>{" "}
-                  will be routed.
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed p-6 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Select an endpoint to see available events
-                </p>
-              </div>
-            )}
-
-            {/* Custom Filter Expression */}
-            <Collapsible>
-              <CollapsibleTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-2"
+            {/* Event Type Selection */}
+            <Field>
+              <Label>Event Type</Label>
+              {selectedEndpoint && availableEvents.length > 0 ? (
+                <Select
+                  value={selectedEventType}
+                  onValueChange={handleEventTypeSelect}
                 >
-                  <Funnel className="size-4" />
-                  Advanced Filter Expression
-                  <CaretDown className="size-3" />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-4 space-y-3">
-                <Field>
-                  <Label htmlFor="filterExpression">
-                    JSONPath Filter{" "}
-                    <span className="text-muted-foreground">(optional)</span>
-                  </Label>
-                  <Textarea
-                    id="filterExpression"
-                    placeholder="$.headers['x-gitlab-event'] == 'merge_request' && $.payload.action == 'open'"
-                    className="font-mono text-sm"
-                    rows={3}
-                    {...register("filterExpression")}
-                  />
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground">
-                      {filterExpression
-                        ? "Custom filter will override event selection"
-                        : "Leave empty to use event selection above"}
-                    </p>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="link"
-                          size="sm"
-                          className="h-auto p-0 text-xs"
-                        >
-                          View examples
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-2xl">
-                        <DialogHeader>
-                          <DialogTitle>Filter Expression Examples</DialogTitle>
-                          <DialogDescription>
-                            Use JSONPath expressions to filter events based on
-                            headers or payload
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="max-h-[60vh] space-y-4 overflow-auto">
-                          <FilterExampleSection
-                            title="Event Type Filtering"
-                            examples={[
-                              {
-                                code: "$.headers['x-gitlab-event'] == 'merge_request'",
-                                desc: "GitLab merge requests only",
-                              },
-                              {
-                                code: "$.headers['x-github-event'] == 'pull_request'",
-                                desc: "GitHub pull requests only",
-                              },
-                            ]}
-                          />
-                          <FilterExampleSection
-                            title="Payload Filtering"
-                            examples={[
-                              {
-                                code: "$.payload.action == 'opened'",
-                                desc: "Only newly opened items",
-                              },
-                              {
-                                code: "$.payload.object_attributes.state == 'merged'",
-                                desc: "Only merged MRs",
-                              },
-                            ]}
-                          />
-                          <FilterExampleSection
-                            title="Combined Filters"
-                            examples={[
-                              {
-                                code: "$.headers['x-gitlab-event'] == 'merge_request' && $.payload.action == 'open'",
-                                desc: "New MRs only",
-                              },
-                              {
-                                code: "($.payload.action == 'opened' || $.payload.action == 'reopened')",
-                                desc: "Opened or reopened",
-                              },
-                            ]}
-                          />
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </Field>
-              </CollapsibleContent>
-            </Collapsible>
+                  <SelectTrigger
+                    className={cn(
+                      "w-full",
+                      errors.eventType && "border-destructive"
+                    )}
+                  >
+                    <SelectValue placeholder="Select an event type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableEvents.map((event) => (
+                      <SelectItem key={event} value={event}>
+                        <span className="font-mono">{event}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : selectedEndpoint ? (
+                <div className="rounded-lg border border-dashed p-4 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No specific events configured for{" "}
+                    <span className="font-medium">{selectedEndpoint.name}</span>
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed p-4 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Select an endpoint to see available events
+                  </p>
+                </div>
+              )}
+              {errors.eventType && (
+                <FieldError>{errors.eventType.message}</FieldError>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Select the event type this route will handle. Use the filter
+                expression below for more granular control.
+              </p>
+            </Field>
+
+            {/* Filter Expression */}
+            <Field>
+              <Label htmlFor="filterExpression">
+                Filter Expression{" "}
+                <span className="text-muted-foreground">(optional)</span>
+              </Label>
+              <Textarea
+                id="filterExpression"
+                placeholder={
+                  selectedEventType
+                    ? `e.g., $.payload.action == 'opened' for ${selectedEventType} events`
+                    : "$.payload.action == 'opened'"
+                }
+                className="font-mono text-sm"
+                rows={3}
+                {...register("filterExpression")}
+              />
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  {filterExpression
+                    ? "Filter will be applied to the selected event type"
+                    : "Add conditions to filter specific events"}
+                </p>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-xs"
+                    >
+                      View examples
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Filter Expression Examples</DialogTitle>
+                      <DialogDescription>
+                        Use JSONPath expressions to filter events based on
+                        payload data
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="max-h-[60vh] space-y-4 overflow-auto">
+                      <FilterExampleSection
+                        title="Action Filtering"
+                        examples={[
+                          {
+                            code: "$.payload.action == 'opened'",
+                            desc: "Only newly opened items (PRs, issues, MRs)",
+                          },
+                          {
+                            code: "$.payload.action == 'merged'",
+                            desc: "Only merged items",
+                          },
+                          {
+                            code: "($.payload.action == 'opened' || $.payload.action == 'reopened')",
+                            desc: "Opened or reopened items",
+                          },
+                        ]}
+                      />
+                      <FilterExampleSection
+                        title="Branch Filtering"
+                        examples={[
+                          {
+                            code: "$.payload.ref == 'refs/heads/main'",
+                            desc: "Only main branch pushes",
+                          },
+                          {
+                            code: "$.payload.pull_request.base.ref == 'main'",
+                            desc: "PRs targeting main branch",
+                          },
+                        ]}
+                      />
+                      <FilterExampleSection
+                        title="GitLab Specific"
+                        examples={[
+                          {
+                            code: "$.payload.object_attributes.state == 'merged'",
+                            desc: "Merged merge requests",
+                          },
+                          {
+                            code: "$.payload.object_attributes.action == 'open'",
+                            desc: "Newly opened MRs",
+                          },
+                        ]}
+                      />
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </Field>
           </CardContent>
         </Card>
 
@@ -754,6 +699,7 @@ export default function CreateRoutePage() {
                 value={watch("messageContent") || ""}
                 onChange={(value) => setValue("messageContent", value)}
                 providerName={selectedEndpoint?.provider?.name}
+                eventType={selectedEventType}
                 placeholder={`🔔 **{{payload.object_kind}}** in {{payload.project.name}}
 
 {{payload.object_attributes.title}}

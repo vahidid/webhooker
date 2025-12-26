@@ -226,9 +226,11 @@ model Route {
   name        String
   description String?
 
-  // Filtering: JSONPath expression to filter events
+  // Filtering: JSONPath expression to filter based on event payload
   // e.g., "$.action == 'opened' && $.pull_request.base.ref == 'main'"
   filterExpression String?
+
+  eventType String // e.g., "push", "pull_request", "issues", etc.
 
   // Inline message content (Handlebars template)
   // Alternative to using a MessageTemplate reference

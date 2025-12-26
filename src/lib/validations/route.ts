@@ -5,6 +5,7 @@ export const createRouteSchema = z.object({
   description: z.string().max(500).optional(),
   endpointId: z.string().min(1, "Endpoint is required"),
   channelId: z.string().min(1, "Channel is required"),
+  eventType: z.string().min(1, "Event type is required"),
   filterExpression: z.string().max(1000).optional(),
   messageContent: z.string().max(10000).optional().nullable(),
   delaySeconds: z.number().int().min(0).max(3600).optional().default(0),
@@ -18,6 +19,7 @@ export const createRouteSchema = z.object({
 export const updateRouteSchema = z.object({
   name: z.string().min(1, "Name is required").max(100).optional(),
   description: z.string().max(500).optional().nullable(),
+  eventType: z.string().min(1).optional(),
   filterExpression: z.string().max(1000).optional().nullable(),
   messageContent: z.string().max(10000).optional().nullable(),
   delaySeconds: z.number().int().min(0).max(3600).optional(),
