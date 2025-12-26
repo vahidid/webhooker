@@ -12,6 +12,12 @@ export interface RouteWithRelations extends Route {
 		id: string;
 		name: string;
 		slug: string;
+		provider: {
+			id: string;
+			name: string;
+			displayName: string;
+			iconUrl: string | null;
+		};
 	};
 	channel: {
 		id: string;
