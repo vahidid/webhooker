@@ -41,7 +41,7 @@ export function getDeliveryQueue(): Queue<Delivery> {
 }
 
 /**
- * Add a pharmacy notification job to the queue
+ * Add a delivery notification job to the queue
  */
 export async function addDeliveryJob(
     data: Delivery,

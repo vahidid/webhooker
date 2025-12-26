@@ -97,7 +97,7 @@ async function processDeliveryJob(
 
 
 /**
- * Create and start the pharmacy notification worker
+ * Create and start the delivery notification worker
  */
 export function startDeliveryWorker(): Worker<Delivery> {
     if (deliveryWorker) {
