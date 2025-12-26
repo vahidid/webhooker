@@ -26,4 +26,23 @@ export class TelegramBroadcaster {
     }
   }
 
+
+  /**
+   * Send message to Telegram chat
+   * @param message The message to send
+   * @return Promise<void>
+   */
+   
+  async sendMessage(message: string): Promise<unknown> {
+    try {
+      const res = await this.bot.sendMessage(this.chatId, message, { parse_mode: 'Markdown' });
+
+      return res
+      
+    } catch (error) {
+      console.error("Failed to send Telegram message:", error);
+      throw error;
+    }
+  } 
+  
 }

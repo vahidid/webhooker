@@ -3,6 +3,8 @@ import prisma from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { verifySignature, extractEventType } from "@/lib/webhook-signature";
 import { evaluateFilter } from "@/lib/filter-expression";
+import { processMessageContent } from "@/lib/template-processor";
+import { addDeliveryJob } from "@/lib/queue";
 
 /**
  * POST /api/webhook/[orgSlug]/[endpointSlug]
@@ -242,6 +244,22 @@ export async function POST(
           Date.now() + (route.delaySeconds || 0) * 1000
         );
 
+        // Process message content using template or messageContent
+        const messageContent = processMessageContent(
+          route,
+          event,
+          {
+            id: endpoint.id,
+            name: endpoint.name,
+            slug: endpoint.slug,
+          },
+          {
+            id: endpoint.organization.id,
+            name: endpoint.organization.name,
+            slug: endpoint.organization.slug,
+          }
+        );
+
         // Create delivery
         const delivery = await prisma.delivery.create({
           data: {
@@ -252,18 +270,15 @@ export async function POST(
             nextAttemptAt: scheduledFor,
             maxAttempts: route.retryCount || 5,
             attemptCount: 0,
+            messageContent,
           },
         });
 
-        // Create initial attempt record (will be processed by queue worker)
-        await prisma.attempt.create({
-          data: {
-            deliveryId: delivery.id,
-            attemptNumber: 1,
-            trigger: "INITIAL",
-            status: "PENDING",
-          },
-        });
+        // Trigger the delivery processing (e.g., add to queue) - omitted here
+        await addDeliveryJob(delivery, {
+          delay: route.delaySeconds || 0,
+          priority: route.priority || 0,
+        })
 
         return delivery;
       })

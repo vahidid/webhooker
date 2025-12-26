@@ -385,6 +385,8 @@ model Delivery {
   // Transformed message content (after template applied)
   transformedBody Json?
 
+  messageContent String @db.Text @default("")
+
   // Current delivery status
   status DeliveryStatus @default(PENDING)
 
