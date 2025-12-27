@@ -1,0 +1,73 @@
+name: Deploy to Server
+
+on:
+    release:
+        types: [published]
+    workflow_dispatch:
+        inputs:
+            tag:
+                description: "Docker tag to deploy (e.g. v1.0.0)"
+                required: true
+                default: "latest"
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        env:
+            # Configuration
+            SERVER_USER: ${{ secrets.SERVER_USER }}
+            SERVER_IP: ${{ secrets.SERVER_IP }}
+            APP_PATH: ${{ secrets.APP_PATH }} # e.g. /home/ubuntu/webhooker
+            DOCKER_IMAGE: ghcr.io/${{ github.repository }}
+            DOCKER_TAG: ${{ github.event_name == 'release' && github.ref_name || github.event.inputs.tag }}
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up SSH
+              uses: webfactory/ssh-agent@v0.9.0
+              with:
+                  ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+            - name: Add host key
+              run: |
+                  mkdir -p ~/.ssh
+                  ssh-keyscan -H ${{ env.SERVER_IP }} >> ~/.ssh/known_hosts
+
+            - name: Prepare Server Directory
+              run: |
+                  ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} "mkdir -p ${{ env.APP_PATH }}"
+
+            - name: Copy Configuration Files
+              run: |
+                  scp docker-compose.nginx.yml nginx.conf ${{ env.SERVER_USER }}@${{ env.SERVER_IP }}:${{ env.APP_PATH }}/
+
+            - name: Deploy Application
+              run: |
+                  ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} "
+                    cd ${{ env.APP_PATH }} &&
+                    
+                    # Login to GitHub Container Registry
+                    echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin &&
+                    
+                    # Export variables for docker-compose
+                    export DOCKER_IMAGE=${{ env.DOCKER_IMAGE }} &&
+                    export DOCKER_TAG=${{ env.DOCKER_TAG }} &&
+                    
+                    # Pull latest images
+                    docker-compose -f docker-compose.nginx.yml pull &&
+                    
+                    # Start services
+                    docker-compose -f docker-compose.nginx.yml up -d &&
+                    
+                    # Cleanup unused images
+                    docker image prune -f
+                  "
+
+            - name: Verify Deployment
+              run: |
+                  ssh ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} "
+                    cd ${{ env.APP_PATH }} &&
+                    docker-compose -f docker-compose.nginx.yml ps
+                  "
