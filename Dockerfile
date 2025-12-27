@@ -54,8 +54,8 @@ RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
 # Copy Prisma files (needed for migrations and worker)
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 
 # Copy standalone build output
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -76,7 +76,8 @@ COPY --from=builder /app/tsconfig.json ./tsconfig.json
 # Install only production dependencies and tools needed for worker
 RUN corepack enable && corepack prepare pnpm@latest --activate && \
     pnpm add -P tsx tsconfig-paths dotenv prisma && \
-    pnpm store prune
+    pnpm store prune && \
+    chown -R nextjs:nodejs /app/node_modules
 
 USER nextjs
 
