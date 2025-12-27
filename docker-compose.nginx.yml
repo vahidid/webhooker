@@ -1,0 +1,189 @@
+version: "3.9"
+
+# Production deployment with Nginx load balancer
+# Usage: docker-compose -f docker-compose.nginx.yml up -d
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: webhooker-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: webhooker
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-webhooker_password}
+      POSTGRES_DB: webhooker
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webhooker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - webhooker-network
+
+  # Redis for BullMQ
+  redis:
+    image: redis:7-alpine
+    container_name: webhooker-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - webhooker-network
+
+  # Database Migration
+  migration:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: webhooker-migration
+    environment:
+      DATABASE_URL: postgresql://webhooker:${POSTGRES_PASSWORD:-webhooker_password}@postgres:5432/webhooker?schema=public
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        npx prisma migrate deploy &&
+        echo 'Migration completed successfully'
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - webhooker-network
+    restart: "no"
+
+  # Next.js Web Application (Scaled)
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://webhooker:${POSTGRES_PASSWORD:-webhooker_password}@postgres:5432/webhooker?schema=public
+      REDIS_URL: redis://redis:6379
+      AUTH_SECRET: ${AUTH_SECRET}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://webhooker.app}
+      APP_URL: ${APP_URL:-https://webhooker.app}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    networks:
+      - webhooker-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/api/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      mode: replicated
+      replicas: 3 # Scale to 3 web instances
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # Delivery Worker (Scaled)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://webhooker:${POSTGRES_PASSWORD:-webhooker_password}@postgres:5432/webhooker?schema=public
+      REDIS_URL: redis://redis:6379
+    command: >
+      sh -c "
+        echo 'Starting delivery worker...' &&
+        node --loader tsx/esm --experimental-specifier-resolution=node src/workers/delivery.ts
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    networks:
+      - webhooker-network
+    deploy:
+      mode: replicated
+      replicas: 5 # Scale to 5 workers
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # Nginx Load Balancer
+  nginx:
+    image: nginx:alpine
+    container_name: webhooker-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - web
+    networks:
+      - webhooker-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost/api/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Certbot for SSL certificates (Let's Encrypt)
+  certbot:
+    image: certbot/certbot
+    container_name: webhooker-certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - webhooker-network
+
+networks:
+  webhooker-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

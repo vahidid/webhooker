@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  # Next.js Web Application (scaled)
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      APP_URL: ${APP_URL}
+    networks:
+      - webhooker-network
+    deploy:
+      mode: replicated
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # Delivery Worker (scaled)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+    command: >
+      sh -c "
+        echo 'Starting delivery worker...' &&
+        node --loader tsx/esm --experimental-specifier-resolution=node src/workers/delivery.ts
+      "
+    networks:
+      - webhooker-network
+    deploy:
+      mode: replicated
+      replicas: 5
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+networks:
+  webhooker-network:
+    external: true
